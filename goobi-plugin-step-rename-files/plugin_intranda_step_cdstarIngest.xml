@@ -1,0 +1,8 @@
+<config_plugin>
+	<url>http://127.0.0.1:9090/v3/</url>
+	<vault>demo</vault>
+	<user>test</user>
+	<password>test</password>
+    
+    <fedoraUrl>https://c104-087.cloud.gwdg.de/api/containers/</fedoraUrl>
+</config_plugin>
