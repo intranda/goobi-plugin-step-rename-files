@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
@@ -16,8 +17,10 @@ import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.configuration.reloading.FileChangedReloadingStrategy;
 import org.apache.commons.configuration.tree.xpath.XPathExpressionEngine;
 import org.apache.commons.lang.StringUtils;
+import org.goobi.beans.LogEntry;
 import org.goobi.beans.Process;
 import org.goobi.beans.Step;
+import org.goobi.production.enums.LogType;
 import org.goobi.production.enums.PluginGuiType;
 import org.goobi.production.enums.PluginReturnValue;
 import org.goobi.production.enums.PluginType;
@@ -25,10 +28,12 @@ import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import de.sub.goobi.config.ConfigPlugins;
+import de.sub.goobi.helper.Helper;
 import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
+import de.sub.goobi.persistence.managers.ProcessManager;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -110,15 +115,15 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                     String extension = olfFileName.substring(olfFileName.lastIndexOf(".") + 1);
                     // check if it is the barcode image
                     String filename = null;
-                    if (olfFileName.contains("barcode") || olfFileName.endsWith("00."+extension)) {
+                    if (olfFileName.contains("barcode") || olfFileName.endsWith("00." + extension)) {
                         //    rename it with '0' as counter
                         filename = getFilename(0, extension);
                     } else {
                         // create new filename
                         filename = getFilename(counter, extension);
                         counter++;
-                        // if old and new filename don't match, rename it
                     }
+                    // if old and new filename don't match, rename it
                     if (!olfFileName.equals(filename)) {
                         StorageProvider.getInstance().move(file, Paths.get(file.getParent().toString(), filename));
                     }
@@ -130,12 +135,14 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             return PluginReturnValue.ERROR;
         }
 
-        // check if it contains a barcode image
-        // -> name it with 00
+        Helper.setMeldung("Renamed images in all folder");
+        LogEntry entry = LogEntry.build(process.getId())
+                .withCreationDate(new Date())
+                .withType(LogType.DEBUG)
+                .withUsername("")
+                .withContent("Renamed images in all folder");
+        ProcessManager.saveLogEntry(entry);
 
-        // rename (other) files, start with 01
-
-        // TODO Auto-generated method stub
         return PluginReturnValue.FINISH;
     }
 
