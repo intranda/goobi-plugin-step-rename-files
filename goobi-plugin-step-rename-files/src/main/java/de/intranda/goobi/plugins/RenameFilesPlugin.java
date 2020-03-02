@@ -178,7 +178,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     @Override
     public String finish() {
-        run();
         return returnPath;
     }
 
