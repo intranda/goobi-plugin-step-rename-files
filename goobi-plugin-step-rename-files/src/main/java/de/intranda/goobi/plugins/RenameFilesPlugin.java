@@ -35,6 +35,7 @@ import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
 import de.sub.goobi.persistence.managers.ProcessManager;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -48,9 +49,18 @@ import ugh.exceptions.WriteException;
 @PluginImplementation
 public class RenameFilesPlugin implements IStepPluginVersion2 {
 
+    @Getter
     private Step step;
     private String returnPath;
     private List<NamePartConfiguration> namePartList;
+
+    @Getter
+    private String title = "intranda_step_rename-files";
+    @Getter
+    private PluginType type = PluginType.Step;
+
+    @Getter
+    private PluginGuiType pluginGuiType = PluginGuiType.NONE;
 
     @Override
     public PluginReturnValue run() {
@@ -187,16 +197,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     @Override
-    public PluginGuiType getPluginGuiType() {
-        return PluginGuiType.NONE;
-    }
-
-    @Override
-    public Step getStep() {
-        return step;
-    }
-
-    @Override
     public void initialize(Step step, String returnPath) {
         this.step = step;
         this.returnPath = returnPath;
@@ -244,16 +244,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     @Override
     public HashMap<String, StepReturnValue> validate() {
         return null;
-    }
-
-    @Override
-    public String getTitle() {
-        return "intranda_step_rename-files";
-    }
-
-    @Override
-    public PluginType getType() {
-        return PluginType.Step;
     }
 
     @Override
