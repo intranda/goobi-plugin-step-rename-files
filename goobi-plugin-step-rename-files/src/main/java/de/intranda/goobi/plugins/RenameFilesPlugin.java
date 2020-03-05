@@ -125,7 +125,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                     String extension = olfFileName.substring(olfFileName.lastIndexOf(".") + 1);
                     // check if it is the barcode image
                     String filename = null;
-                    if (olfFileName.contains("barcode") || olfFileName.endsWith("00." + extension)) {
+                    // TODO check, if the counter is set to "0"
+                    if (olfFileName.contains("barcode") ) {
                         //    rename it with '0' as counter
                         filename = getFilename(0, extension);
                     } else {
