@@ -73,8 +73,10 @@ public class DeleteBarcodeImagePlugin implements IStepPluginVersion2 {
                 String filenameWithoutExtension = imageName.getFileName().toString();
                 filenameWithoutExtension = filenameWithoutExtension.substring(0, filenameWithoutExtension.lastIndexOf("."));
                 String[] nameParts = filenameWithoutExtension.split(namepartSplitter);
-                // TODO check only the last part?
-                for (String part : nameParts) {
+                // just check the last token
+                String part = nameParts[nameParts.length -1];
+                // if all parts should be checked, uncomment this for loop
+//                for (String part : nameParts) {
                     if (StringUtils.isNumeric(part) && part.length() > 1 ) {
                         // check if it is 0, 00, 000, 0000, ....
                         if (Integer.parseInt(part) == 0) {
@@ -82,14 +84,14 @@ public class DeleteBarcodeImagePlugin implements IStepPluginVersion2 {
                             StorageProvider.getInstance().deleteFile(imageName);
                         }
                     }
-                }
+//                }
             }
 
         } catch (IOException | InterruptedException | SwapException | DAOException e) {
             log.error(e);
         }
 
-        return false;
+        return true;
     }
 
     @Override

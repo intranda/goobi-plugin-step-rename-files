@@ -2,6 +2,7 @@
     <config>
         <project>*</project>
         <step>*</step>
+        <startValue>0</startValue>
         <namepart type="variable">{processtitle}</namepart>
         <namepart type="static">_</namepart>
         <namepart type="counter">00000</namepart>
