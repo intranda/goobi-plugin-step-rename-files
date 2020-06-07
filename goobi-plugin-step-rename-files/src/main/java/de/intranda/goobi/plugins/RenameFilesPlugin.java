@@ -53,6 +53,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private Step step;
     private String returnPath;
     private List<NamePartConfiguration> namePartList;
+    private int startValue = 1;
 
     @Getter
     private String title = "intranda_step_rename-files";
@@ -118,7 +119,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             }
             // for each folder
             for (Path folder : folders) {
-                int counter = 1;
+                int counter = startValue;
                 List<Path> filesInFolder = StorageProvider.getInstance().listFiles(folder.toString());
                 for (Path file : filesInFolder) {
                     String olfFileName = file.getFileName().toString();
@@ -233,6 +234,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     private void initConfig(SubnodeConfiguration config) {
+    	startValue = config.getInt("startValue", 1);
         namePartList = new ArrayList<>();
         @SuppressWarnings("unchecked")
         List<HierarchicalConfiguration> fields = config.configurationsAt("namepart");
