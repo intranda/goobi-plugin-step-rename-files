@@ -13,9 +13,6 @@ import java.util.List;
 
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
-import org.apache.commons.configuration.XMLConfiguration;
-import org.apache.commons.configuration.reloading.FileChangedReloadingStrategy;
-import org.apache.commons.configuration.tree.xpath.XPathExpressionEngine;
 import org.apache.commons.lang.StringUtils;
 import org.goobi.beans.LogEntry;
 import org.goobi.beans.Process;
@@ -202,34 +199,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     public void initialize(Step step, String returnPath) {
         this.step = step;
         this.returnPath = returnPath;
-
-        String projectName = step.getProzess().getProjekt().getTitel();
-
-        XMLConfiguration xmlConfig = ConfigPlugins.getPluginConfig(getTitle());
-        xmlConfig.setExpressionEngine(new XPathExpressionEngine());
-        xmlConfig.setReloadingStrategy(new FileChangedReloadingStrategy());
-
-        SubnodeConfiguration myconfig = null;
-
-        // order of configuration is:
-        // 1.) project name and step name matches
-        // 2.) step name matches and project is *
-        // 3.) project name matches and step name is *
-        // 4.) project name and step name are *
-        try {
-            myconfig = xmlConfig.configurationAt("//config[./project = '" + projectName + "'][./step = '" + step.getTitel() + "']");
-        } catch (IllegalArgumentException e) {
-            try {
-                myconfig = xmlConfig.configurationAt("//config[./project = '*'][./step = '" + step.getTitel() + "']");
-            } catch (IllegalArgumentException e1) {
-                try {
-                    myconfig = xmlConfig.configurationAt("//config[./project = '" + projectName + "'][./step = '*']");
-                } catch (IllegalArgumentException e2) {
-                    myconfig = xmlConfig.configurationAt("//config[./project = '*'][./step = '*']");
-                }
-            }
-        }
-
+        SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
         initConfig(myconfig);
     }
 
