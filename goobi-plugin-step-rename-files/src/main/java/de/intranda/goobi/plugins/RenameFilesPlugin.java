@@ -53,7 +53,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private int startValue = 1;
 
     @Getter
-    private String title = "intranda_step_rename-files";
+    private String title = "intranda_step_rename_files";
     @Getter
     private PluginType type = PluginType.Step;
 
