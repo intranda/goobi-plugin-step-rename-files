@@ -206,7 +206,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private void initConfig(SubnodeConfiguration config) {
     	startValue = config.getInt("startValue", 1);
         namePartList = new ArrayList<>();
-        @SuppressWarnings("unchecked")
         List<HierarchicalConfiguration> fields = config.configurationsAt("namepart");
         for (HierarchicalConfiguration hc : fields) {
             NamePartConfiguration npc = new NamePartConfiguration(hc.getString("."), hc.getString("@type", "static"));
