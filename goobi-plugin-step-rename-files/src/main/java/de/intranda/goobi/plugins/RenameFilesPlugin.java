@@ -68,38 +68,51 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         try {
             Path masterFolder = Paths.get(process.getImagesOrigDirectory(false));
             Path derivateFolder = Paths.get(process.getImagesTifDirectory(false));
-            Path thumbFolder = Paths.get(process.getImagesTifDirectory(true));
+//            Path thumbFolder = Paths.get(process.getImagesTifDirectory(true));
             Path altoFolder = Paths.get(process.getOcrAltoDirectory());
             Path pdfFolder = Paths.get(process.getOcrPdfDirectory());
             Path txtFolder = Paths.get(process.getOcrTxtDirectory());
             Path xmlFolder = Paths.get(process.getOcrXmlDirectory());
 
             if (Files.exists(masterFolder)) {
+            	log.debug("add masterfolder: " + masterFolder.getFileName().toString());
                 folders.add(masterFolder);
             }
             if (Files.exists(derivateFolder) && !masterFolder.getFileName().toString().equals(derivateFolder.getFileName().toString())) {
-                folders.add(derivateFolder);
+            	log.debug("add derivateFolder: " + derivateFolder.getFileName().toString());
+            	folders.add(derivateFolder);
             }
 
-            if (Files.exists(thumbFolder) && !thumbFolder.getFileName().toString().equals(derivateFolder.getFileName().toString())) {
-                folders.add(thumbFolder);
-            }
+//            if (Files.exists(thumbFolder) && !thumbFolder.getFileName().toString().equals(derivateFolder.getFileName().toString())) {
+//            	log.error("add thumbFolder: " + thumbFolder.getFileName().toString());
+//            	folders.add(thumbFolder);
+//            }
+            
             if (Files.exists(altoFolder)) {
-                folders.add(altoFolder);
+            	log.debug("add altoFolder: " + altoFolder.getFileName().toString());
+            	folders.add(altoFolder);
             }
             if (Files.exists(pdfFolder)) {
-                folders.add(pdfFolder);
+            	log.debug("add pdfFolder: " + pdfFolder.getFileName().toString());
+            	folders.add(pdfFolder);
             }
             if (Files.exists(txtFolder)) {
-                folders.add(txtFolder);
+            	log.debug("add txtFolder: " + txtFolder.getFileName().toString());
+            	folders.add(txtFolder);
             }
             if (Files.exists(xmlFolder)) {
-                folders.add(xmlFolder);
+            	log.debug("add xmlFolder: " + xmlFolder.getFileName().toString());
+            	folders.add(xmlFolder);
             }
 
         } catch (IOException | InterruptedException | SwapException | DAOException e) {
             log.error(e);
         }
+        
+        for (Path folder : folders) {
+        	log.error("object to rename: " + folder.getFileName().toString());
+        }
+        
 
         try {
             Fileformat fileformat = process.readMetadataFile();
@@ -116,9 +129,12 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             }
             // for each folder
             for (Path folder : folders) {
+            	log.debug("start renaming inside of: " + folder.getFileName().toString());
+            	
                 int counter = startValue;
                 List<Path> filesInFolder = StorageProvider.getInstance().listFiles(folder.toString());
                 for (Path file : filesInFolder) {
+                	log.debug("start renaming file: " + file.getFileName().toString());
                     String olfFileName = file.getFileName().toString();
                     String extension = olfFileName.substring(olfFileName.lastIndexOf(".") + 1);
                     // check if it is the barcode image
