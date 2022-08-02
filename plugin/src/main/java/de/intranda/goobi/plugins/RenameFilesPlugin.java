@@ -40,7 +40,6 @@ import net.xeoh.plugins.base.annotations.PluginImplementation;
 import ugh.dl.Fileformat;
 import ugh.exceptions.PreferencesException;
 import ugh.exceptions.ReadException;
-import ugh.exceptions.WriteException;
 
 @Log4j2
 @PluginImplementation
@@ -68,51 +67,50 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         try {
             Path masterFolder = Paths.get(process.getImagesOrigDirectory(false));
             Path derivateFolder = Paths.get(process.getImagesTifDirectory(false));
-//            Path thumbFolder = Paths.get(process.getImagesTifDirectory(true));
+            //            Path thumbFolder = Paths.get(process.getImagesTifDirectory(true));
             Path altoFolder = Paths.get(process.getOcrAltoDirectory());
             Path pdfFolder = Paths.get(process.getOcrPdfDirectory());
             Path txtFolder = Paths.get(process.getOcrTxtDirectory());
             Path xmlFolder = Paths.get(process.getOcrXmlDirectory());
 
             if (Files.exists(masterFolder)) {
-            	log.debug("add masterfolder: " + masterFolder.getFileName().toString());
+                log.debug("add masterfolder: " + masterFolder.getFileName().toString());
                 folders.add(masterFolder);
             }
             if (Files.exists(derivateFolder) && !masterFolder.getFileName().toString().equals(derivateFolder.getFileName().toString())) {
-            	log.debug("add derivateFolder: " + derivateFolder.getFileName().toString());
-            	folders.add(derivateFolder);
+                log.debug("add derivateFolder: " + derivateFolder.getFileName().toString());
+                folders.add(derivateFolder);
             }
 
-//            if (Files.exists(thumbFolder) && !thumbFolder.getFileName().toString().equals(derivateFolder.getFileName().toString())) {
-//            	log.error("add thumbFolder: " + thumbFolder.getFileName().toString());
-//            	folders.add(thumbFolder);
-//            }
-            
+            //            if (Files.exists(thumbFolder) && !thumbFolder.getFileName().toString().equals(derivateFolder.getFileName().toString())) {
+            //            	log.error("add thumbFolder: " + thumbFolder.getFileName().toString());
+            //            	folders.add(thumbFolder);
+            //            }
+
             if (Files.exists(altoFolder)) {
-            	log.debug("add altoFolder: " + altoFolder.getFileName().toString());
-            	folders.add(altoFolder);
+                log.debug("add altoFolder: " + altoFolder.getFileName().toString());
+                folders.add(altoFolder);
             }
             if (Files.exists(pdfFolder)) {
-            	log.debug("add pdfFolder: " + pdfFolder.getFileName().toString());
-            	folders.add(pdfFolder);
+                log.debug("add pdfFolder: " + pdfFolder.getFileName().toString());
+                folders.add(pdfFolder);
             }
             if (Files.exists(txtFolder)) {
-            	log.debug("add txtFolder: " + txtFolder.getFileName().toString());
-            	folders.add(txtFolder);
+                log.debug("add txtFolder: " + txtFolder.getFileName().toString());
+                folders.add(txtFolder);
             }
             if (Files.exists(xmlFolder)) {
-            	log.debug("add xmlFolder: " + xmlFolder.getFileName().toString());
-            	folders.add(xmlFolder);
+                log.debug("add xmlFolder: " + xmlFolder.getFileName().toString());
+                folders.add(xmlFolder);
             }
 
-        } catch (IOException | InterruptedException | SwapException | DAOException e) {
+        } catch (IOException | SwapException | DAOException e) {
             log.error(e);
         }
-        
+
         for (Path folder : folders) {
-        	log.error("object to rename: " + folder.getFileName().toString());
+            log.error("object to rename: " + folder.getFileName().toString());
         }
-        
 
         try {
             Fileformat fileformat = process.readMetadataFile();
@@ -129,18 +127,18 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             }
             // for each folder
             for (Path folder : folders) {
-            	log.debug("start renaming inside of: " + folder.getFileName().toString());
-            	
+                log.debug("start renaming inside of: " + folder.getFileName().toString());
+
                 int counter = startValue;
                 List<Path> filesInFolder = StorageProvider.getInstance().listFiles(folder.toString());
                 for (Path file : filesInFolder) {
-                	log.debug("start renaming file: " + file.getFileName().toString());
+                    log.debug("start renaming file: " + file.getFileName().toString());
                     String olfFileName = file.getFileName().toString();
                     String extension = olfFileName.substring(olfFileName.lastIndexOf(".") + 1);
                     // check if it is the barcode image
                     String filename = null;
                     // TODO check, if the counter is set to "0"
-                    if (olfFileName.contains("barcode") ) {
+                    if (olfFileName.contains("barcode")) {
                         //    rename it with '0' as counter
                         filename = getFilename(0, extension);
                     } else {
@@ -155,7 +153,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                 }
             }
 
-        } catch (ReadException | PreferencesException | WriteException | IOException | InterruptedException | SwapException | DAOException e) {
+        } catch (ReadException | PreferencesException | IOException | SwapException e) {
             log.error(e);
             return PluginReturnValue.ERROR;
         }
@@ -220,7 +218,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     private void initConfig(SubnodeConfiguration config) {
-    	startValue = config.getInt("startValue", 1);
+        startValue = config.getInt("startValue", 1);
         namePartList = new ArrayList<>();
         List<HierarchicalConfiguration> fields = config.configurationsAt("namepart");
         for (HierarchicalConfiguration hc : fields) {
