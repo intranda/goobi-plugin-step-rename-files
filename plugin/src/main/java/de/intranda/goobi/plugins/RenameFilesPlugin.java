@@ -7,14 +7,12 @@ import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.apache.commons.lang.StringUtils;
-import org.goobi.beans.LogEntry;
 import org.goobi.beans.Process;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.LogType;
@@ -30,7 +28,6 @@ import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
-import de.sub.goobi.persistence.managers.ProcessManager;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
@@ -159,12 +156,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         Helper.setMeldung("Renamed images in all folder");
-        LogEntry entry = LogEntry.build(process.getId())
-                .withCreationDate(new Date())
-                .withType(LogType.DEBUG)
-                .withUsername("")
-                .withContent("Renamed images in all folder");
-        ProcessManager.saveLogEntry(entry);
+        Helper.addMessageToProcessJournal(process.getId(), LogType.DEBUG, "Renamed images in all folder", "");
 
         return PluginReturnValue.FINISH;
     }
