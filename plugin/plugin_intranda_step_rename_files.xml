@@ -2,6 +2,7 @@
     <config>
         <project>*</project>
         <step>*</step>
+        <folder>*</folder>
         <startValue>0</startValue>
         <namepart type="variable">{processtitle}</namepart>
         <namepart type="static">_</namepart>
