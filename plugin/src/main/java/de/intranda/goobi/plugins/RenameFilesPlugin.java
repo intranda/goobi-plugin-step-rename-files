@@ -143,10 +143,16 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                         filename = getFilename(counter, extension);
                         counter++;
                     }
+                    // ======================== BUG === BELOW ======================== //
+                    // ======= If there is already another file named after `ofFileName`, ================= //
+                    // ======= Then it would be overwritten, i.e. gone without warning. ================== //
+
                     // if old and new filename don't match, rename it
                     if (!olfFileName.equals(filename)) {
                         StorageProvider.getInstance().move(file, Paths.get(file.getParent().toString(), filename));
                     }
+
+                    // ======================== BUG === ABOVE ======================== //
                 }
             }
 
