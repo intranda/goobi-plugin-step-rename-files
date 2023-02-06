@@ -50,7 +50,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private int startValue = 1;
     private String folderConfigured = "*";
     private static ConfigurationHelper configHelper = ConfigurationHelper.getInstance();
-    //    private static StorageProvider provider = (StorageProvider) StorageProvider.getInstance();
 
     @Getter
     private String title = "intranda_step_rename_files";
@@ -73,8 +72,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             replacer = new VariableReplacer(fileformat != null ? fileformat.getDigitalDocument() : null,
                     process.getRegelsatz().getPreferences(), process, step);
         } catch (ReadException | IOException | SwapException | PreferencesException e1) {
-            // TODO Auto-generated catch block
-            e1.printStackTrace();
+            log.error("Errors happened while trying to initialize the Fileformat and VariableReplacer.");
+            log.error(e1);
         }
 
         // get folder list
@@ -82,6 +81,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             getFolderList(process, folders, replacer, folderConfigured);
 
         } catch (IOException | SwapException | DAOException e) {
+            log.error("Errors happened while trying to get the list of folders.");
             log.error(e);
         }
 
@@ -97,37 +97,17 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                 npc.setFormat(new DecimalFormat(npc.getNamePartValue()));
             }
         }
-        // for each folder
+
+        // rename files in each folder
         for (Path folder : folders) {
             log.debug("start renaming inside of: " + folder.getFileName().toString());
 
-            int counter = startValue;
-            List<Path> filesInFolder = StorageProvider.getInstance().listFiles(folder.toString());
-            for (Path file : filesInFolder) {
-                log.debug("start renaming file: " + file.getFileName().toString());
-                String olfFileName = file.getFileName().toString();
-                String extension = olfFileName.substring(olfFileName.lastIndexOf(".") + 1);
-                // check if it is the barcode image
-                String fileName = null;
-                // TODO check, if the counter is set to "0"
-                if (olfFileName.contains("barcode")) {
-                    //    rename it with '0' as counter
-                    fileName = getFilename(0, extension);
-                } else {
-                    // create new filename
-                    fileName = getFilename(counter, extension);
-                    counter++;
-                }
-
-                // if old and new filename don't match, rename it
-                if (!olfFileName.equals(fileName)) {
-                    try {
-                        tryRenameFile(file, fileName);
-                    } catch (IOException e) {
-                        log.error("IOException caught while trying to rename the files in " + folder.toString());
-                    }
-                }
+            try {
+                renameFilesInFolder(folder);
+            } catch (IOException e) {
+                log.error("IOException caught while trying to rename the files in " + folder.toString());
             }
+
             // move all the files from the temp folder back again
             try {
                 moveFilesFromTempBack(folder);
@@ -142,15 +122,36 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return PluginReturnValue.FINISH;
     }
 
-    private void getFolderList(Process process, List<Path> folders, VariableReplacer replacer, String folder)
+    /**
+     * get the list of folders whose files are to be renamed
+     * 
+     * @param process the Goobi process
+     * @param folders a List of Path that is supposed to maintain the results
+     * @param replacer VariableReplacer object that is to be used for the case of user-configured folders
+     * @param folderSpecified String that specifies the folder's name, any String value other than "*" will result in a length-one list containing
+     *            only this specified folder
+     * @throws IOException
+     * @throws SwapException
+     * @throws DAOException
+     */
+    private void getFolderList(Process process, List<Path> folders, VariableReplacer replacer, String folderSpecified)
             throws IOException, SwapException, DAOException {
-        if (StringUtils.isBlank(folder) || folder.equals("*")) {
+        if (StringUtils.isBlank(folderSpecified) || folderSpecified.equals("*")) {
             getFolderListDefault(process, folders);
         } else {
             getFolderListConfigured(process, folders, replacer);
         }
     }
 
+    /**
+     * get the list of folders under default settings
+     * 
+     * @param process the Goobi process
+     * @param folders a List of Path that is supposed to maintain the results
+     * @throws IOException
+     * @throws SwapException
+     * @throws DAOException
+     */
     private void getFolderListDefault(Process process, List<Path> folders) throws IOException, SwapException, DAOException {
         Path masterFolder = Paths.get(process.getImagesOrigDirectory(false));
         Path derivateFolder = Paths.get(process.getImagesTifDirectory(false));
@@ -192,9 +193,20 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
+    /**
+     * get the list of folders given user-configured settings
+     * 
+     * @param process the Goobi process
+     * @param folders a List of Path that is supposed to maintain the results
+     * @param replacer VariableReplacer object
+     * @throws IOException
+     * @throws SwapException
+     */
     private void getFolderListConfigured(Process process, List<Path> folders, VariableReplacer replacer) throws IOException, SwapException {
         if (replacer == null) {
             // an error should be triggered here since replacer is needed
+            log.error("VariableReplacer is needed here, but it is null!");
+            throw new SwapException("Null is not a valid VariableReplacer!");
         }
         String folder = configHelper.getAdditionalProcessFolderName(folderConfigured);
         log.debug("folderConfigured before replacement = " + folder);
@@ -208,40 +220,44 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
-    private void tryRenameFile(Path file, String fileName) throws IOException {
-        Path targetPath = Paths.get(file.getParent().toString(), fileName);
-        if (StorageProvider.getInstance().isFileExists(targetPath)) {
-            log.debug("targetPath is occupied: " + targetPath.toString());
-            log.debug("Moving the file " + fileName + " to temp folder for the moment instead.");
-            // move files to a temp folder
-            moveFileToTempFolder(file, fileName);
-        } else {
-            StorageProvider.getInstance().move(file, Paths.get(file.getParent().toString(), fileName));
-        }
-    }
-
-    private void moveFileToTempFolder(Path filePath, String fileName) throws IOException {
-        String tempFolder = "temp";
-        Path tempFolderPath = Paths.get(filePath.getParent().toString(), "temp");
-        if (!StorageProvider.getInstance().isFileExists(tempFolderPath)) {
-            StorageProvider.getInstance().createDirectories(tempFolderPath);
-        }
-        StorageProvider.getInstance().move(filePath, Paths.get(tempFolderPath.toString(), fileName));
-    }
-
-    private void moveFilesFromTempBack(Path folderPath) throws IOException {
-        String tempFolder = "temp";
-        Path tempFolderPath = Paths.get(folderPath.toString(), "temp");
-        if (StorageProvider.getInstance().isFileExists(tempFolderPath)) {
-            log.debug("Moving files back from the temp folder: " + tempFolderPath.toString());
-            List<Path> files = StorageProvider.getInstance().listFiles(tempFolderPath.toString());
-            for (Path file : files) {
-                StorageProvider.getInstance().move(file, Paths.get(folderPath.toString(), file.getFileName().toString()));
+    /**
+     * rename all files in the given folder
+     * 
+     * @param folder the Path of the folder whose files should be renamed
+     * @throws IOException
+     */
+    private void renameFilesInFolder(Path folder) throws IOException {
+        int counter = startValue;
+        List<Path> filesInFolder = StorageProvider.getInstance().listFiles(folder.toString());
+        for (Path file : filesInFolder) {
+            log.debug("start renaming file: " + file.getFileName().toString());
+            String olfFileName = file.getFileName().toString();
+            String extension = olfFileName.substring(olfFileName.lastIndexOf(".") + 1);
+            // check if it is the barcode image
+            String fileName = null;
+            // TODO check, if the counter is set to "0"
+            if (olfFileName.contains("barcode")) {
+                //    rename it with '0' as counter
+                fileName = getFilename(0, extension);
+            } else {
+                // create new filename
+                fileName = getFilename(counter, extension);
+                counter++;
             }
-            StorageProvider.getInstance().deleteDir(tempFolderPath);
+            // if old and new filename don't match, rename it
+            if (!olfFileName.equals(fileName)) {
+                tryRenameFile(file, fileName);
+            }
         }
     }
 
+    /**
+     * get the new name for a file
+     * 
+     * @param counter the ordinal number of the file among all files in the same folder
+     * @param extension the file extension
+     * @return
+     */
     private String getFilename(int counter, String extension) {
         StringBuilder sb = new StringBuilder();
         for (NamePartConfiguration npc : namePartList) {
@@ -258,6 +274,62 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return sb.toString();
     }
 
+    /**
+     * try to rename a file
+     * 
+     * @param filePath the Path of the file which is to be renamed
+     * @param newFileName the new name of the file
+     * @throws IOException
+     */
+    private void tryRenameFile(Path filePath, String newFileName) throws IOException {
+        Path targetPath = Paths.get(filePath.getParent().toString(), newFileName);
+        if (StorageProvider.getInstance().isFileExists(targetPath)) {
+            log.debug("targetPath is occupied: " + targetPath.toString());
+            log.debug("Moving the file " + newFileName + " to temp folder for the moment instead.");
+            // move files to a temp folder
+            moveFileToTempFolder(filePath, newFileName);
+        } else {
+            StorageProvider.getInstance().move(filePath, Paths.get(filePath.getParent().toString(), newFileName));
+        }
+    }
+
+    /**
+     * move files whose new names have conflictions with other files to a temp folder for the moment
+     * 
+     * @param filePath the Path of the file which is to be moved
+     * @param fileName the new name of this file
+     * @throws IOException
+     */
+    private void moveFileToTempFolder(Path filePath, String newFileName) throws IOException {
+        String tempFolder = "temp";
+        Path tempFolderPath = Paths.get(filePath.getParent().toString(), tempFolder);
+        if (!StorageProvider.getInstance().isFileExists(tempFolderPath)) {
+            StorageProvider.getInstance().createDirectories(tempFolderPath);
+        }
+        StorageProvider.getInstance().move(filePath, Paths.get(tempFolderPath.toString(), newFileName));
+    }
+
+    /**
+     * move files back from the temp folder
+     * 
+     * @param folderPath the Path of the folder whose files have just been renamed
+     * @throws IOException
+     */
+    private void moveFilesFromTempBack(Path folderPath) throws IOException {
+        String tempFolder = "temp";
+        Path tempFolderPath = Paths.get(folderPath.toString(), tempFolder);
+        if (StorageProvider.getInstance().isFileExists(tempFolderPath)) {
+            log.debug("Moving files back from the temp folder: " + tempFolderPath.toString());
+            List<Path> files = StorageProvider.getInstance().listFiles(tempFolderPath.toString());
+            for (Path file : files) {
+                StorageProvider.getInstance().move(file, Paths.get(folderPath.toString(), file.getFileName().toString()));
+            }
+            StorageProvider.getInstance().deleteDir(tempFolderPath);
+            log.debug("Temp folder deleted: " + tempFolderPath.toString());
+        }
+    }
+
+
     @Override
     public String cancel() {
         return returnPath;
@@ -265,11 +337,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     @Override
     public boolean execute() {
-        if (run().equals(PluginReturnValue.FINISH)) {
-            return true;
-        } else {
-            return false;
-        }
+        return run().equals(PluginReturnValue.FINISH);
     }
 
     @Override
@@ -285,9 +353,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     @Override
     public void initialize(Step step, String returnPath) {
         log.debug("================= Starting RenameFilesPlugin =================");
-
-        log.debug(configHelper.getAdditionalProcessFolderName("greyscale"));
-
         this.step = step;
         this.returnPath = returnPath;
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
