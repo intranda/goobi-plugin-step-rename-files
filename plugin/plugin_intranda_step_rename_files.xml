@@ -5,7 +5,7 @@
         
         <!-- if configured, the value will be used by the VariableReplacer to search for the prepared replacement in `goobi_config.properties` -->
         <!-- e.g. process.folder.images.greyscale={processtitle}_greyscale -->
-        <!-- if left blank or configured by *, then the default settings will be used -->
+        <!-- if left blank or configured by *, or if there is no folder tag found, then the default settings will be used -->
         <folder>greyscale</folder>
         
         <startValue>2</startValue>
