@@ -231,12 +231,12 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         List<Path> filesInFolder = StorageProvider.getInstance().listFiles(folder.toString());
         for (Path file : filesInFolder) {
             log.debug("start renaming file: " + file.getFileName().toString());
-            String olfFileName = file.getFileName().toString();
-            String extension = olfFileName.substring(olfFileName.lastIndexOf(".") + 1);
+            String oldFileName = file.getFileName().toString();
+            String extension = oldFileName.substring(oldFileName.lastIndexOf(".") + 1);
             // check if it is the barcode image
             String fileName = null;
             // TODO check, if the counter is set to "0"
-            if (olfFileName.contains("barcode")) {
+            if (oldFileName.contains("barcode")) {
                 //    rename it with '0' as counter
                 fileName = getFilename(0, extension);
             } else {
@@ -245,7 +245,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                 counter++;
             }
             // if old and new filename don't match, rename it
-            if (!olfFileName.equals(fileName)) {
+            if (!oldFileName.equals(fileName)) {
                 tryRenameFile(file, fileName);
             }
         }
@@ -289,7 +289,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             // move files to a temp folder
             moveFileToTempFolder(filePath, newFileName);
         } else {
-            StorageProvider.getInstance().move(filePath, Paths.get(filePath.getParent().toString(), newFileName));
+            StorageProvider.getInstance().move(filePath, targetPath);
         }
     }
 
