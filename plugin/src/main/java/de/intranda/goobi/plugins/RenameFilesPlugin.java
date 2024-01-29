@@ -9,11 +9,15 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import com.google.gson.Gson;
+import de.sub.goobi.persistence.managers.PropertyManager;
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.apache.commons.lang.StringUtils;
 import org.goobi.beans.Process;
+import org.goobi.beans.Processproperty;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.LogType;
 import org.goobi.production.enums.PluginGuiType;
@@ -42,6 +46,7 @@ import ugh.exceptions.ReadException;
 @Log4j2
 @PluginImplementation
 public class RenameFilesPlugin implements IStepPluginVersion2 {
+    private static final String NAME_PART_TYPE_ORIGINALFILENAME = "originalfilename";
 
     @Getter
     private Step step;
@@ -59,10 +64,52 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     @Getter
     private PluginGuiType pluginGuiType = PluginGuiType.NONE;
 
+    private static final String PROPERTY_TITLE = "plugin_intranda_step_rename_files";
+    private Processproperty property;
+
+    private Map<String, Map<String, String>> renamingLog = new HashMap<>();
+
+    private void initializeProcessProperty(Process process) {
+        if (property != null) {
+            // already initialized
+            return;
+        }
+        List<Processproperty> props = PropertyManager.getProcessPropertiesForProcess(process.getId());
+        for (Processproperty p : props) {
+            if (PROPERTY_TITLE.equals(p.getTitel())) {
+                property = p;
+                break;
+            }
+        }
+        if (property == null) {
+            // no such property exists yet, create a new one
+            property = new Processproperty();
+            property.setProcessId(process.getId());
+            property.setTitel(PROPERTY_TITLE);
+        }
+
+        renamingLog.clear();
+        Gson gson = new Gson();
+        renamingLog = gson.fromJson(property.getWert(), Map.class);
+        // Initialize empty, if deserialization was not successful
+        if (renamingLog == null) {
+            renamingLog = new HashMap<>();
+        }
+    }
+
+    private void saveProcessProperty(Process process) {
+        Gson gson = new Gson();
+        String json = gson.toJson(renamingLog);
+        property.setWert(json);
+        log.debug(json);
+        PropertyManager.saveProcessProperty(property);
+    }
+
     @Override
     public PluginReturnValue run() {
         Process process = step.getProzess();
         List<Path> folders = new ArrayList<>();
+        initializeProcessProperty(process);
 
         // prepare the VariableReplacer before trying to get the folder list, since it is needed when a folder is configured specifically
         Fileformat fileformat = null;
@@ -103,9 +150,10 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             log.debug("start renaming inside of: " + folder.getFileName().toString());
 
             try {
-                renameFilesInFolder(folder);
+                Map<String, String> folderRenamingLog = getFolderRenamingLog(folder);
+                renameFilesInFolder(folder, folderRenamingLog);
             } catch (IOException e) {
-                log.error("IOException caught while trying to rename the files in " + folder.toString());
+                log.error("IOException caught while trying to rename the files in " + folder.toString() + "\n\t" + e.getMessage());
             }
 
             // move all the files from the temp folder back again
@@ -119,7 +167,21 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         Helper.setMeldung("Renamed images in all folder");
         Helper.addMessageToProcessJournal(process.getId(), LogType.DEBUG, "Renamed images in all folder", "");
 
+        saveProcessProperty(process);
+
         return PluginReturnValue.FINISH;
+    }
+
+    private Map<String, String> getFolderRenamingLog(Path folder) {
+        String folderIdentifier = extractFolderIdentifier(folder);
+        if (!renamingLog.containsKey(folderIdentifier)) {
+            renamingLog.put(folderIdentifier, new HashMap<>());
+        }
+        return renamingLog.get(folderIdentifier);
+    }
+
+    private String extractFolderIdentifier(Path folder) {
+        return folder.getParent().getFileName().toString() + "_" + folder.getFileName().toString().substring(folder.getFileName().toString().lastIndexOf("_") + 1);
     }
 
     /**
@@ -226,10 +288,17 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
      * @param folder the Path of the folder whose files should be renamed
      * @throws IOException
      */
-    private void renameFilesInFolder(Path folder) throws IOException {
+    private void renameFilesInFolder(Path folder, Map<String, String> folderRenamingLog) throws IOException {
+        if (!StorageProvider.getInstance().isDirectory(folder)) {
+            throw new IOException("Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is not a directory");
+        }
+
         int counter = startValue;
         List<Path> filesInFolder = StorageProvider.getInstance().listFiles(folder.toString());
         for (Path file : filesInFolder) {
+            if (StorageProvider.getInstance().isDirectory(file)) {
+                throw new IOException("Cannot rename file in directory. The given path \"" + file.toString() + "\" is a directory");
+            }
             log.debug("start renaming file: " + file.getFileName().toString());
             String oldFileName = file.getFileName().toString();
             String extension = oldFileName.substring(oldFileName.lastIndexOf(".") + 1);
@@ -238,17 +307,28 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             // TODO check, if the counter is set to "0"
             if (oldFileName.contains("barcode")) {
                 //    rename it with '0' as counter
-                fileName = getFilename(0, extension);
+                fileName = generateNewFileName(folderRenamingLog, oldFileName, 0, extension);
             } else {
                 // create new filename
-                fileName = getFilename(counter, extension);
+                fileName = generateNewFileName(folderRenamingLog, oldFileName, counter, extension);
                 counter++;
             }
             // if old and new filename don't match, rename it
             if (!oldFileName.equals(fileName)) {
-                tryRenameFile(file, fileName);
+                if (tryRenameFile(file, fileName)) {
+                    updateRenameLog(folderRenamingLog, oldFileName, fileName);
+                }
             }
         }
+    }
+
+    private void updateRenameLog(Map<String, String> renamingLog, String from, String to) {
+        String originalFileName = from;
+        if (renamingLog.containsKey(from)) {
+            originalFileName = renamingLog.get(from);
+            renamingLog.remove(from);
+        }
+        renamingLog.put(to, originalFileName);
     }
 
     /**
@@ -258,11 +338,14 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
      * @param extension the file extension
      * @return
      */
-    private String getFilename(int counter, String extension) {
+    private String generateNewFileName(Map<String, String> folderRenamingLog, String currentFileName, int counter, String extension) {
         StringBuilder sb = new StringBuilder();
         for (NamePartConfiguration npc : namePartList) {
             if (npc.getFormat() != null) {
                 sb.append(npc.getFormat().format(counter));
+            } else if (npc.getNamePartType().equals(NAME_PART_TYPE_ORIGINALFILENAME)) {
+                String originalFileName = folderRenamingLog.getOrDefault(currentFileName, currentFileName);
+                sb.append(getFileNameWithoutExtension(originalFileName));
             } else {
                 sb.append(npc.getNamePartValue());
             }
@@ -274,22 +357,32 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return sb.toString();
     }
 
+    private String getFileNameWithoutExtension(String originalFileName) {
+        if (!originalFileName.contains(".")) {
+            return originalFileName;
+        }
+        return originalFileName.substring(0, originalFileName.lastIndexOf('.'));
+    }
+
     /**
      * try to rename a file
      * 
      * @param filePath the Path of the file which is to be renamed
      * @param newFileName the new name of the file
+     * @return true, if the renaming was successful
      * @throws IOException
      */
-    private void tryRenameFile(Path filePath, String newFileName) throws IOException {
+    private boolean tryRenameFile(Path filePath, String newFileName) throws IOException {
         Path targetPath = Paths.get(filePath.getParent().toString(), newFileName);
         if (StorageProvider.getInstance().isFileExists(targetPath)) {
             log.debug("targetPath is occupied: " + targetPath.toString());
             log.debug("Moving the file " + newFileName + " to temp folder for the moment instead.");
             // move files to a temp folder
             moveFileToTempFolder(filePath, newFileName);
+            return false;
         } else {
             StorageProvider.getInstance().move(filePath, targetPath);
+            return true;
         }
     }
 
@@ -382,13 +475,16 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     @Data
-    @RequiredArgsConstructor
     public class NamePartConfiguration {
-        @NonNull
         private String namePartValue;
         @NonNull
         private String namePartType;
 
         private NumberFormat format;
+
+        NamePartConfiguration(String namePartValue, String namePartType) {
+            this.namePartValue = namePartValue;
+            this.namePartType = namePartType;
+        }
     }
 }
