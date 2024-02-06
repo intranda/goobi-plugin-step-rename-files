@@ -11,8 +11,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.google.gson.Gson;
-import de.sub.goobi.persistence.managers.PropertyManager;
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.apache.commons.lang.StringUtils;
@@ -26,6 +24,8 @@ import org.goobi.production.enums.PluginType;
 import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
+import com.google.gson.Gson;
+
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.config.ConfigurationHelper;
 import de.sub.goobi.helper.Helper;
@@ -33,10 +33,10 @@ import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
+import de.sub.goobi.persistence.managers.PropertyManager;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
 import ugh.dl.Fileformat;
@@ -46,12 +46,14 @@ import ugh.exceptions.ReadException;
 @Log4j2
 @PluginImplementation
 public class RenameFilesPlugin implements IStepPluginVersion2 {
+    private static final long serialVersionUID = -5097830334502599546L;
+
     private static final String NAME_PART_TYPE_ORIGINALFILENAME = "originalfilename";
 
     @Getter
     private Step step;
     private String returnPath;
-    private List<NamePartConfiguration> namePartList;
+    private transient List<NamePartConfiguration> namePartList;
     private int startValue = 1;
     private String folderConfigured = "*";
     private static ConfigurationHelper configHelper = ConfigurationHelper.getInstance();
@@ -69,6 +71,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     private Map<String, Map<String, String>> renamingLog = new HashMap<>();
 
+    @SuppressWarnings("unchecked")
     private void initializeProcessProperty(Process process) {
         if (property != null) {
             // already initialized
@@ -138,9 +141,9 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
         // create filename rule
         for (NamePartConfiguration npc : namePartList) {
-            if (npc.getNamePartType().equalsIgnoreCase("variable")) {
+            if ("variable".equalsIgnoreCase(npc.getNamePartType())) {
                 npc.setNamePartValue(replacer.replace(npc.getNamePartValue()));
-            } else if (npc.getNamePartType().equalsIgnoreCase("counter")) {
+            } else if ("counter".equalsIgnoreCase(npc.getNamePartType())) {
                 npc.setFormat(new DecimalFormat(npc.getNamePartValue()));
             }
         }
@@ -181,7 +184,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     private String extractFolderIdentifier(Path folder) {
-        return folder.getParent().getFileName().toString() + "_" + folder.getFileName().toString().substring(folder.getFileName().toString().lastIndexOf("_") + 1);
+        return folder.getParent().getFileName().toString() + "_"
+                + folder.getFileName().toString().substring(folder.getFileName().toString().lastIndexOf("_") + 1);
     }
 
     /**
@@ -198,7 +202,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
      */
     private void getFolderList(Process process, List<Path> folders, VariableReplacer replacer, String folderSpecified)
             throws IOException, SwapException, DAOException {
-        if (StringUtils.isBlank(folderSpecified) || folderSpecified.equals("*")) {
+        if (StringUtils.isBlank(folderSpecified) || "*".equals(folderSpecified)) {
             getFolderListDefault(process, folders);
         } else {
             getFolderListConfigured(process, folders, replacer);
@@ -217,7 +221,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private void getFolderListDefault(Process process, List<Path> folders) throws IOException, SwapException, DAOException {
         Path masterFolder = Paths.get(process.getImagesOrigDirectory(false));
         Path derivateFolder = Paths.get(process.getImagesTifDirectory(false));
-        //            Path thumbFolder = Paths.get(process.getImagesTifDirectory(true));
         Path altoFolder = Paths.get(process.getOcrAltoDirectory());
         Path pdfFolder = Paths.get(process.getOcrPdfDirectory());
         Path txtFolder = Paths.get(process.getOcrTxtDirectory());
@@ -231,11 +234,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             log.debug("add derivateFolder: " + derivateFolder.getFileName().toString());
             folders.add(derivateFolder);
         }
-
-        //            if (Files.exists(thumbFolder) && !thumbFolder.getFileName().toString().equals(derivateFolder.getFileName().toString())) {
-        //              log.error("add thumbFolder: " + thumbFolder.getFileName().toString());
-        //              folders.add(thumbFolder);
-        //            }
 
         if (Files.exists(altoFolder)) {
             log.debug("add altoFolder: " + altoFolder.getFileName().toString());
@@ -314,10 +312,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                 counter++;
             }
             // if old and new filename don't match, rename it
-            if (!oldFileName.equals(fileName)) {
-                if (tryRenameFile(file, fileName)) {
-                    updateRenameLog(folderRenamingLog, oldFileName, fileName);
-                }
+            if (!oldFileName.equals(fileName) && tryRenameFile(file, fileName)) {
+                updateRenameLog(folderRenamingLog, oldFileName, fileName);
             }
         }
     }
@@ -343,7 +339,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         for (NamePartConfiguration npc : namePartList) {
             if (npc.getFormat() != null) {
                 sb.append(npc.getFormat().format(counter));
-            } else if (npc.getNamePartType().equals(NAME_PART_TYPE_ORIGINALFILENAME)) {
+            } else if (NAME_PART_TYPE_ORIGINALFILENAME.equals(npc.getNamePartType())) {
                 String originalFileName = folderRenamingLog.getOrDefault(currentFileName, currentFileName);
                 sb.append(getFileNameWithoutExtension(originalFileName));
             } else {
@@ -422,7 +418,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
-
     @Override
     public String cancel() {
         return returnPath;
@@ -430,7 +425,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     @Override
     public boolean execute() {
-        return run().equals(PluginReturnValue.FINISH);
+        return PluginReturnValue.FINISH.equals(run());
     }
 
     @Override
@@ -466,7 +461,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     @Override
     public HashMap<String, StepReturnValue> validate() {
-        return null;
+        return null; //NOSONAR
     }
 
     @Override
