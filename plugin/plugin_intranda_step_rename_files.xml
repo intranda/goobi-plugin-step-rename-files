@@ -13,18 +13,16 @@
         <namepart type="static">_</namepart>
         <namepart type="counter">00000</namepart>
     </config>
-    
+
     <config>
         <project>Archive_Project</project>
         <step>*</step>
         <!-- use default settings -->
-        <folder></folder>
-        <startValue>2</startValue>
-        <namepart type="variable">{processtitle}</namepart>
-        <namepart type="static">_</namepart>
-        <namepart type="counter">00000</namepart>
+        <folder>*</folder>
+        <namepart type="originalfilename" />
+        <namepart type="static">_ARCHIVE</namepart>
     </config>
-    
+
     <config>
         <project>*</project>
         <step>*</step>
