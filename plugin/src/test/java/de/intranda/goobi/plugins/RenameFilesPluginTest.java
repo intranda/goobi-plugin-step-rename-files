@@ -224,4 +224,27 @@ public class RenameFilesPluginTest {
 
         expectRenamingFromTo(oldFiles, newFiles);
     }
+
+    @Test
+    public void onlySingleCounterRenamingFormatConfigured_expectCorrectFileRenaming() throws ConfigurationException, IOException {
+        setupPluginConfiguration("counter-only_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00001.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"));
+
+        mockDefaultRenamingFoldersExist(true);
+        when(storage.listFiles(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY.toString()))
+                .thenReturn(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
 }

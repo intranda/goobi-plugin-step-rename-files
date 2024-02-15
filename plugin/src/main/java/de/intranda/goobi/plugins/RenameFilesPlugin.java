@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -155,7 +156,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                             parseConditions(namePartConfigXML.configurationsAt("condition")));
                     renamingConfigurations.add(npc);
                 });
-
+        for (NamePartConfiguration npc : renamingConfigurations) {
+            if ("counter".equalsIgnoreCase(npc.getNamePartType())) {
+                npc.setFormat(new DecimalFormat(npc.getNamePartValue()));
+            }
+        }
         //        this.updateMetsFile = config.getBoolean("metsFile/update", false);
         //        startValue = config.getInt("startValue", 1);
     }
@@ -316,13 +321,15 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         Map<Path, Path> result = new TreeMap<>();
 
         List<Path> filesToRename = StorageProvider.getInstance().listFiles(folder.toString());
+
+        int counter = 1;
         for (Path file : filesToRename) {
             String oldFullFileName = file.getFileName().toString();
             int extensionIndex = oldFullFileName.lastIndexOf(".");
             String fileExtension = oldFullFileName.substring(extensionIndex + 1);
             String oldFileName = oldFullFileName.substring(0, extensionIndex);
 
-            String newFullFileName = generateNewFileName(oldFileName) + "." + fileExtension;
+            String newFullFileName = generateNewFileName(oldFileName, counter) + "." + fileExtension;
 
             //            if (oldFileName.contains("barcode")) {
             //                //    rename it with '0' as counter
@@ -332,6 +339,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             //                fileName = generateNewFileName(oldFileName, counter, extension);
             //                counter++;
             //            }
+            counter++;
 
             // Only rename if not changed
             if (!oldFullFileName.equals(newFullFileName)) {
@@ -342,11 +350,15 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return result;
     }
 
-    private String generateNewFileName(String fileName) {
+    private String generateNewFileName(String fileName, int counter) {
         StringBuilder sb = new StringBuilder();
 
         for (NamePartConfiguration npc : renamingConfigurations) {
-            sb.append(npc.getNamePartValue());
+            if (npc.getFormat() != null) {
+                sb.append(npc.getFormat().format(counter));
+            } else {
+                sb.append(npc.getNamePartValue());
+            }
         }
 
         return sb.toString();
