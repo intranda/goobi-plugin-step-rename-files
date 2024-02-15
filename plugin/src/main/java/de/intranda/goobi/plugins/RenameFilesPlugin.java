@@ -1,10 +1,14 @@
 package de.intranda.goobi.plugins;
 
+import java.io.IOException;
 import java.lang.reflect.Type;
+import java.nio.file.Path;
 import java.text.NumberFormat;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import org.apache.commons.configuration.HierarchicalConfiguration;
@@ -22,8 +26,9 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import de.sub.goobi.config.ConfigPlugins;
-import de.sub.goobi.config.ConfigurationHelper;
+import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
+import de.sub.goobi.helper.exceptions.SwapException;
 import de.sub.goobi.persistence.managers.PropertyManager;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -32,6 +37,9 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
+import ugh.dl.Fileformat;
+import ugh.exceptions.PreferencesException;
+import ugh.exceptions.ReadException;
 
 @Log4j2
 @PluginImplementation
@@ -41,6 +49,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private static final String PROPERTY_TITLE = "plugin_intranda_step_rename_files";
     private static final String NAME_PART_TYPE_ORIGINALFILENAME = "originalfilename";
 
+    private static Gson gson = new Gson();
+
     @Getter
     private String title = "intranda_step_rename_files";
     @Getter
@@ -48,43 +58,65 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     @Getter
     private PluginGuiType pluginGuiType = PluginGuiType.NONE;
 
-    @Getter
     private Process process;
+    private Processproperty property;
     @Getter
     private Step step;
     private String returnPath;
 
-    private static ConfigurationHelper configHelper = ConfigurationHelper.getInstance();
-    private static Gson gson = new Gson();
-
-    private Processproperty property;
+    private List<String> configuredFoldersToRename;
 
     private Map<String, Map<String, String>> renamingLog = new HashMap<>();
 
-    @Override
-    public PluginReturnValue run() {
-        return PluginReturnValue.FINISH;
+    // ###################################################################################
+
+    @Data
+    @RequiredArgsConstructor
+    @AllArgsConstructor
+    public class NamePartConfiguration {
+        public boolean allConditionsMatch(VariableReplacer replacer) {
+            return this.conditions.stream().allMatch(c -> c.matches(replacer));
+        }
+
+        @NonNull
+        private String namePartValue;
+        @NonNull
+        private String namePartType;
+        @NonNull
+        private List<ReplacementConfiguration> replacements;
+        @NonNull
+        private List<ConditionConfiguration> conditions;
+        private NumberFormat format;
     }
 
-    @Override
-    public String cancel() {
-        return returnPath;
+    @Data
+    @RequiredArgsConstructor
+    public class ConditionConfiguration {
+        public boolean matches(VariableReplacer replacer) {
+            String replacedValue = replacer.replace(value);
+            return replacedValue.matches(matches);
+        }
+
+        @NonNull
+        private String value;
+        @NonNull
+        private String matches;
     }
 
-    @Override
-    public boolean execute() {
-        return PluginReturnValue.FINISH.equals(run());
+    @Data
+    @RequiredArgsConstructor
+    public class ReplacementConfiguration {
+        public String replace(String value) {
+            return value.replaceAll(regex, replacement);
+        }
+
+        @NonNull
+        private String regex;
+        @NonNull
+        private String replacement;
     }
 
-    @Override
-    public String finish() {
-        return returnPath;
-    }
-
-    @Override
-    public String getPagePath() {
-        return null;
-    }
+    // ###################################################################################
 
     @Override
     public void initialize(Step step, String returnPath) {
@@ -93,17 +125,17 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         this.process = step.getProzess();
         this.returnPath = returnPath;
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        initConfig(myconfig);
+        loadPluginConfiguration(myconfig);
         this.property = initializeProcessProperty(step.getProzess());
         this.renamingLog = deserializeRenamingLogFromJson(this.property.getWert());
     }
 
-    private void initConfig(SubnodeConfiguration config) {
+    private void loadPluginConfiguration(SubnodeConfiguration config) {
+        configuredFoldersToRename = config.getList("folder", List.of("*"))
+                .stream()
+                .map(Object::toString)
+                .collect(Collectors.toList());
         //        startValue = config.getInt("startValue", 1);
-        //        foldersConfigured = config.getList("folder", List.of("*"))
-        //                .stream()
-        //                .map(Object::toString)
-        //                .collect(Collectors.toList());
         //        log.debug("foldersConfigured = " + foldersConfigured);
         //        namePartList = new ArrayList<>();
         //        this.updateMetsFile = config.getBoolean("metsFile/update", false);
@@ -175,49 +207,78 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return 0;
     }
 
-    @Data
-    @RequiredArgsConstructor
-    @AllArgsConstructor
-    public class NamePartConfiguration {
-        public boolean allConditionsMatch(VariableReplacer replacer) {
-            return this.conditions.stream().allMatch(c -> c.matches(replacer));
-        }
-
-        @NonNull
-        private String namePartValue;
-        @NonNull
-        private String namePartType;
-        @NonNull
-        private List<ReplacementConfiguration> replacements;
-        @NonNull
-        private List<ConditionConfiguration> conditions;
-        private NumberFormat format;
+    @Override
+    public String cancel() {
+        return returnPath;
     }
 
-    @Data
-    @RequiredArgsConstructor
-    public class ConditionConfiguration {
-        public boolean matches(VariableReplacer replacer) {
-            String replacedValue = replacer.replace(value);
-            return replacedValue.matches(matches);
-        }
-
-        @NonNull
-        private String value;
-        @NonNull
-        private String matches;
+    @Override
+    public boolean execute() {
+        return PluginReturnValue.FINISH.equals(run());
     }
 
-    @Data
-    @RequiredArgsConstructor
-    public class ReplacementConfiguration {
-        public String replace(String value) {
-            return value.replaceAll(regex, replacement);
+    @Override
+    public String finish() {
+        return returnPath;
+    }
+
+    @Override
+    public String getPagePath() {
+        return null;
+    }
+
+    // ###################################################################################
+
+    @Override
+    public PluginReturnValue run() {
+        try {
+            VariableReplacer replacer = getVariableReplacer();
+            List<Path> foldersToRename = determineFoldersToRename();
+            Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
+        } catch (PluginException e) {
+            log.error(e.getMessage());
+            log.error(e);
+            return PluginReturnValue.ERROR;
         }
 
-        @NonNull
-        private String regex;
-        @NonNull
-        private String replacement;
+        return PluginReturnValue.FINISH;
+    }
+
+    private VariableReplacer getVariableReplacer() throws PluginException {
+        try {
+            Fileformat fileformat = process.readMetadataFile();
+            return new VariableReplacer(fileformat != null ? fileformat.getDigitalDocument() : null,
+                    process.getRegelsatz().getPreferences(), process, step);
+        } catch (ReadException | IOException | SwapException | PreferencesException e1) {
+            throw new PluginException("Errors happened while trying to initialize the Fileformat and VariableReplacer", e1);
+        }
+    }
+
+    private List<Path> determineFoldersToRename() {
+        return configuredFoldersToRename
+                .stream()
+                .flatMap(configuredFolder -> determineRealPathsForConfiguredFolder(configuredFolder)
+                        .stream())
+                .collect(Collectors.toList());
+    }
+
+    private List<Path> determineRealPathsForConfiguredFolder(String configuredFolder) {
+        return Collections.emptyList();
+    }
+
+    private Map<Path, Path> determineRenamingForAllFilesInAllFolders(List<Path> foldersToRename) throws PluginException {
+        Map<Path, Path> result = new TreeMap<>();
+        for (Path folder : foldersToRename) {
+            result.putAll(determineRenamingForAllFilesInFolder(folder));
+        }
+        return result;
+    }
+
+    private Map<Path, Path> determineRenamingForAllFilesInFolder(Path folder) throws PluginException {
+        if (!StorageProvider.getInstance().isDirectory(folder)) {
+            throw new PluginException("Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is not a directory");
+        }
+
+        return Collections.emptyMap();
     }
 }
