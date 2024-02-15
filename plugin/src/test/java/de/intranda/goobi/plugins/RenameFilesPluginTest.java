@@ -171,17 +171,21 @@ public class RenameFilesPluginTest {
         }
     }
 
+    private void mockDefaultRenamingFoldersExist(boolean doExist) {
+        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY))).thenReturn(doExist);
+        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY))).thenReturn(doExist);
+        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_ALTO_DIRECTORY))).thenReturn(doExist);
+        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_PDF_DIRECTORY))).thenReturn(doExist);
+        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_TXT_DIRECTORY))).thenReturn(doExist);
+        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY))).thenReturn(doExist);
+    }
+
     @Test
     public void noRenamingFormatConfigured_expectPluginSucceeding() throws ConfigurationException {
         setupPluginConfiguration("folder_star");
         initializate();
 
-        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY))).thenReturn(true);
-        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY))).thenReturn(true);
-        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_ALTO_DIRECTORY))).thenReturn(true);
-        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_PDF_DIRECTORY))).thenReturn(true);
-        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_TXT_DIRECTORY))).thenReturn(true);
-        when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY))).thenReturn(true);
+        mockDefaultRenamingFoldersExist(true);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
     }
@@ -199,10 +203,24 @@ public class RenameFilesPluginTest {
         setupPluginConfiguration("static-only_renaming_star");
         initializate();
 
-        List<Path> oldFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "001.tif"));
-        List<Path> newFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "STATIC.tif"));
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "001.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "001.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "001.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "STATIC.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "STATIC.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "STATIC.xml"));
 
-        when(storage.listFiles(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY.toString())).thenReturn(oldFiles);
+        mockDefaultRenamingFoldersExist(true);
+        when(storage.listFiles(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY.toString()))
+                .thenReturn(List.of(oldFiles.get(0)));
+        when(storage.listFiles(DEFAULT_PROCESS_TIF_DIRECTORY.toString()))
+                .thenReturn(List.of(oldFiles.get(1)));
+        when(storage.listFiles(DEFAULT_PROCESS_OCR_XML_DIRECTORY.toString()))
+                .thenReturn(List.of(oldFiles.get(2)));
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
 
         expectRenamingFromTo(oldFiles, newFiles);
     }

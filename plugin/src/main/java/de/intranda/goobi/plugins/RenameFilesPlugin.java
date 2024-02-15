@@ -6,7 +6,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.NumberFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -248,6 +247,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             variableReplacer = getVariableReplacer();
             List<Path> foldersToRename = determineFoldersToRename();
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
+            performRenaming(renamingMapping);
         } catch (IOException | PluginException | SwapException | DAOException e) {
             log.error(e.getMessage());
             log.error(e);
@@ -313,6 +313,53 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             throw new PluginException("Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is not a directory");
         }
 
-        return Collections.emptyMap();
+        Map<Path, Path> result = new TreeMap<>();
+
+        List<Path> filesToRename = StorageProvider.getInstance().listFiles(folder.toString());
+        for (Path file : filesToRename) {
+            String oldFullFileName = file.getFileName().toString();
+            int extensionIndex = oldFullFileName.lastIndexOf(".");
+            String fileExtension = oldFullFileName.substring(extensionIndex + 1);
+            String oldFileName = oldFullFileName.substring(0, extensionIndex);
+
+            String newFullFileName = generateNewFileName(oldFileName) + "." + fileExtension;
+
+            //            if (oldFileName.contains("barcode")) {
+            //                //    rename it with '0' as counter
+            //                fileName = generateNewFileName(oldFileName, 0, extension);
+            //            } else {
+            //                // create new filename
+            //                fileName = generateNewFileName(oldFileName, counter, extension);
+            //                counter++;
+            //            }
+
+            // Only rename if not changed
+            if (!oldFullFileName.equals(newFullFileName)) {
+                result.put(Paths.get(folder.toString(), oldFullFileName), Paths.get(folder.toString(), newFullFileName));
+            }
+        }
+
+        return result;
+    }
+
+    private String generateNewFileName(String fileName) {
+        StringBuilder sb = new StringBuilder();
+
+        for (NamePartConfiguration npc : renamingConfigurations) {
+            sb.append(npc.getNamePartValue());
+        }
+
+        return sb.toString();
+    }
+
+    private void performRenaming(Map<Path, Path> renamingMap) throws IOException {
+        try {
+            for (Map.Entry<Path, Path> e : renamingMap.entrySet()) {
+                StorageProvider.getInstance().move(e.getKey(), e.getValue());
+            }
+        } catch (IOException e) {
+            log.error("Error during renaming. The renamed files might be inconsistent");
+            throw e;
+        }
     }
 }
