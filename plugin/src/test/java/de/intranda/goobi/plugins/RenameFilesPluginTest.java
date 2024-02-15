@@ -3,9 +3,13 @@ package de.intranda.goobi.plugins;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.nio.file.Path;
 import java.util.List;
 
+import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.SubnodeConfiguration;
+import org.apache.commons.configuration.XMLConfiguration;
+import org.apache.commons.configuration.tree.xpath.XPathExpressionEngine;
 import org.easymock.EasyMock;
 import org.goobi.beans.Process;
 import org.goobi.beans.Processproperty;
@@ -93,6 +97,14 @@ public class RenameFilesPluginTest {
         plugin.initialize(step, DEFAULT_RETURN_PAGE);
     }
 
+    private SubnodeConfiguration loadPluginConfiguration(String testFileName) throws ConfigurationException {
+        XMLConfiguration xmlConfig = new XMLConfiguration();
+        xmlConfig.load(getClass().getResource("/" + testFileName + ".xml"));
+        xmlConfig.setDelimiterParsingDisabled(true);
+        xmlConfig.setExpressionEngine(new XPathExpressionEngine());
+        return xmlConfig.configurationAt("//config");
+    }
+
     //    private void setupDefaultPluginConfiguration() {
     //        HierarchicalConfiguration rootConfiguration = new HierarchicalConfiguration();
     //        ConfigurationNode configRoot = new DefaultConfigurationNode("config");
@@ -109,18 +121,23 @@ public class RenameFilesPluginTest {
     //        pluginConfiguration = new SubnodeConfiguration(rootConfiguration, configRoot);
     //    }
 
+    private void setupPluginConfiguration(String configurationName) throws ConfigurationException {
+        pluginConfiguration = loadPluginConfiguration(configurationName);
+    }
+
     @Test
-    public void whenExecutingPlugin_givenWorkingDefaultPluginConfiguration_expectPluginSucceeding() {
-        //        setupDefaultPluginConfiguration();
+    public void whenExecutingPlugin_givenWorkingDefaultPluginConfiguration_expectPluginSucceeding() throws ConfigurationException {
+        setupPluginConfiguration("folder_star");
         initializate();
 
         assertTrue(plugin.execute());
     }
 
     @Test
-    public void whenExecutingPlugin_givenWorkingDefaultPluginConfiguration_expectStorageDirectoryCheck() {
-        //        setupPluginConfigurationWithNonExistingFolder();
+    public void whenExecutingPlugin_givenWorkingDefaultPluginConfiguration_expectStorageDirectoryCheck() throws ConfigurationException {
+        setupPluginConfiguration("folder_non-existent");
         initializate();
+        Mockito.when(storage.isDirectory(Path.of("non-existent"))).thenReturn(false);
 
         assertEquals(PluginReturnValue.ERROR, plugin.run());
     }

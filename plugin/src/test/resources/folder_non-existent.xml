@@ -1,0 +1,5 @@
+<config_plugin>
+    <config>
+        <folder>non-existent</folder>
+    </config>
+</config_plugin>

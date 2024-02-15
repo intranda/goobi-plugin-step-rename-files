@@ -3,6 +3,7 @@ package de.intranda.goobi.plugins;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.text.NumberFormat;
 import java.util.Collections;
 import java.util.HashMap;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import org.apache.commons.collections4.list.TreeList;
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.goobi.beans.Process;
@@ -26,6 +28,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
 import de.sub.goobi.config.ConfigPlugins;
+import de.sub.goobi.config.ConfigurationHelper;
 import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.SwapException;
@@ -50,6 +53,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private static final String NAME_PART_TYPE_ORIGINALFILENAME = "originalfilename";
 
     private static Gson gson = new Gson();
+    private static ConfigurationHelper configurationHelper = ConfigurationHelper.getInstance();
 
     @Getter
     private String title = "intranda_step_rename_files";
@@ -64,6 +68,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private Step step;
     private String returnPath;
 
+    private VariableReplacer variableReplacer;
     private List<String> configuredFoldersToRename;
 
     private Map<String, Map<String, String>> renamingLog = new HashMap<>();
@@ -232,10 +237,10 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     @Override
     public PluginReturnValue run() {
         try {
-            VariableReplacer replacer = getVariableReplacer();
+            variableReplacer = getVariableReplacer();
             List<Path> foldersToRename = determineFoldersToRename();
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
-        } catch (PluginException e) {
+        } catch (IOException | PluginException | SwapException e) {
             log.error(e.getMessage());
             log.error(e);
             return PluginReturnValue.ERROR;
@@ -254,16 +259,36 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
-    private List<Path> determineFoldersToRename() {
-        return configuredFoldersToRename
-                .stream()
-                .flatMap(configuredFolder -> determineRealPathsForConfiguredFolder(configuredFolder)
-                        .stream())
-                .collect(Collectors.toList());
+    private List<Path> determineFoldersToRename() throws IOException, SwapException {
+        List<Path> result = new TreeList<>();
+        for (String folderSpecification : configuredFoldersToRename) {
+            result.addAll(determineRealPathsForConfiguredFolder(folderSpecification));
+        }
+        return result;
     }
 
-    private List<Path> determineRealPathsForConfiguredFolder(String configuredFolder) {
+    private List<Path> determineRealPathsForConfiguredFolder(String configuredFolder) throws IOException, SwapException {
+        if ("*".equals(configuredFolder)) {
+            return determineDefaultFoldersToRename();
+        } else {
+            return transformConfiguredFolderSpecificationToRealPath(configuredFolder);
+        }
+    }
+
+    private List<Path> determineDefaultFoldersToRename() {
         return Collections.emptyList();
+    }
+
+    private List<Path> transformConfiguredFolderSpecificationToRealPath(String folderSpecification) throws IOException, SwapException {
+        String folder = configurationHelper.getAdditionalProcessFolderName(folderSpecification);
+        folder = variableReplacer.replace(folder);
+        Path configuredFolder = Paths.get(process.getImagesDirectory(), folder);
+
+        //        if (Files.exists(configuredFolder)) {
+        //            log.debug("add configuredFolder: " + configuredFolder.getFileName().toString());
+        //            folders.add(configuredFolder);
+        //        }
+        return List.of(configuredFolder);
     }
 
     private Map<Path, Path> determineRenamingForAllFilesInAllFolders(List<Path> foldersToRename) throws PluginException {
