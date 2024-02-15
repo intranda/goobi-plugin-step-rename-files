@@ -5,6 +5,7 @@ import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +32,7 @@ import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.config.ConfigurationHelper;
 import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
+import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
 import de.sub.goobi.persistence.managers.PropertyManager;
 import lombok.AllArgsConstructor;
@@ -70,6 +72,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     private VariableReplacer variableReplacer;
     private List<String> configuredFoldersToRename;
+    private List<NamePartConfiguration> renamingConfigurations;
 
     private Map<String, Map<String, String>> renamingLog = new HashMap<>();
 
@@ -140,17 +143,37 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                 .stream()
                 .map(Object::toString)
                 .collect(Collectors.toList());
-        //        startValue = config.getInt("startValue", 1);
-        //        log.debug("foldersConfigured = " + foldersConfigured);
-        //        namePartList = new ArrayList<>();
+        log.debug("configuredFoldersToRename = " + configuredFoldersToRename);
+
+        // TODO: Stream map
+        renamingConfigurations = new ArrayList<>();
+        config.configurationsAt("namepart")
+                .stream()
+                .forEachOrdered(namePartConfigXML -> {
+                    NamePartConfiguration npc = new NamePartConfiguration(namePartConfigXML.getString("."),
+                            namePartConfigXML.getString("@type", "static"),
+                            parseReplacements(namePartConfigXML.configurationsAt("replace")),
+                            parseConditions(namePartConfigXML.configurationsAt("condition")));
+                    renamingConfigurations.add(npc);
+                });
+
         //        this.updateMetsFile = config.getBoolean("metsFile/update", false);
-        //        List<HierarchicalConfiguration> fields = config.configurationsAt("namepart");
-        //        for (HierarchicalConfiguration hc : fields) {
-        //            NamePartConfiguration npc = new NamePartConfiguration(hc.getString("."), hc.getString("@type", "static"),
-        //                    parseReplacements(hc.configurationsAt("replace")),
-        //                    parseConditions(hc.configurationsAt("condition")));
-        //            namePartList.add(npc);
-        //        }
+        //        startValue = config.getInt("startValue", 1);
+    }
+
+    private @NonNull List<ReplacementConfiguration> parseReplacements(
+            List<HierarchicalConfiguration> replacementConfigs) {
+        return replacementConfigs.stream()
+                .map(config -> new ReplacementConfiguration(config.getString("@regex", ""),
+                        config.getString("@replacement", "")))
+                .collect(Collectors.toList());
+    }
+
+    private @NonNull List<ConditionConfiguration> parseConditions(List<HierarchicalConfiguration> configs) {
+        return configs.stream()
+                .map(
+                        config -> new ConditionConfiguration(config.getString("@value", ""), config.getString("@matches", "")))
+                .collect(Collectors.toList());
     }
 
     private Processproperty initializeProcessProperty(Process process) {
@@ -185,21 +208,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     private String serializeRenamingLogIntoJson(Map<String, Map<String, String>> renamingLog) {
         return gson.toJson(renamingLog);
-    }
-
-    private @NonNull List<ReplacementConfiguration> parseReplacements(
-            List<HierarchicalConfiguration> replacementConfigs) {
-        return replacementConfigs.stream()
-                .map(config -> new ReplacementConfiguration(config.getString("@regex", ""),
-                        config.getString("@replacement", "")))
-                .collect(Collectors.toList());
-    }
-
-    private @NonNull List<ConditionConfiguration> parseConditions(List<HierarchicalConfiguration> configs) {
-        return configs.stream()
-                .map(
-                        config -> new ConditionConfiguration(config.getString("@value", ""), config.getString("@matches", "")))
-                .collect(Collectors.toList());
     }
 
     @Override
@@ -240,7 +248,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             variableReplacer = getVariableReplacer();
             List<Path> foldersToRename = determineFoldersToRename();
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
-        } catch (IOException | PluginException | SwapException e) {
+        } catch (IOException | PluginException | SwapException | DAOException e) {
             log.error(e.getMessage());
             log.error(e);
             return PluginReturnValue.ERROR;
@@ -259,7 +267,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
-    private List<Path> determineFoldersToRename() throws IOException, SwapException {
+    private List<Path> determineFoldersToRename() throws IOException, SwapException, DAOException {
         List<Path> result = new TreeList<>();
         for (String folderSpecification : configuredFoldersToRename) {
             result.addAll(determineRealPathsForConfiguredFolder(folderSpecification));
@@ -267,7 +275,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return result;
     }
 
-    private List<Path> determineRealPathsForConfiguredFolder(String configuredFolder) throws IOException, SwapException {
+    private List<Path> determineRealPathsForConfiguredFolder(String configuredFolder) throws IOException, SwapException, DAOException {
         if ("*".equals(configuredFolder)) {
             return determineDefaultFoldersToRename();
         } else {
@@ -275,19 +283,20 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
-    private List<Path> determineDefaultFoldersToRename() {
-        return Collections.emptyList();
+    private List<Path> determineDefaultFoldersToRename() throws IOException, SwapException, DAOException {
+        return List.of(
+                Paths.get(process.getImagesOrigDirectory(false)),
+                Paths.get(process.getImagesTifDirectory(false)),
+                Paths.get(process.getOcrAltoDirectory()),
+                Paths.get(process.getOcrPdfDirectory()),
+                Paths.get(process.getOcrTxtDirectory()),
+                Paths.get(process.getOcrXmlDirectory()));
     }
 
     private List<Path> transformConfiguredFolderSpecificationToRealPath(String folderSpecification) throws IOException, SwapException {
         String folder = configurationHelper.getAdditionalProcessFolderName(folderSpecification);
         folder = variableReplacer.replace(folder);
         Path configuredFolder = Paths.get(process.getImagesDirectory(), folder);
-
-        //        if (Files.exists(configuredFolder)) {
-        //            log.debug("add configuredFolder: " + configuredFolder.getFileName().toString());
-        //            folders.add(configuredFolder);
-        //        }
         return List.of(configuredFolder);
     }
 
