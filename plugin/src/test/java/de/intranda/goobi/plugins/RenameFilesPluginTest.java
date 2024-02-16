@@ -23,6 +23,7 @@ import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.configuration.tree.xpath.XPathExpressionEngine;
 import org.goobi.beans.Process;
 import org.goobi.beans.Processproperty;
+import org.goobi.beans.Project;
 import org.goobi.beans.Ruleset;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.PluginReturnValue;
@@ -56,6 +57,8 @@ public class RenameFilesPluginTest {
     private static final String DEFAULT_PROCESS_OCR_XML_DIRECTORY = "/opt/digiverso/goobi/metadata/1/images/xml";
 
     private static final String DEFAULT_RETURN_PAGE = "pageBefore";
+    private static final String DEFAULT_PROCESS_TITLE = "TestProcess123";
+    private static final int DEFAULT_PROJECT_ID = 1;
     private static final int DEFAULT_PROCESS_ID = 1;
 
     private Processproperty processProperty;
@@ -63,6 +66,7 @@ public class RenameFilesPluginTest {
     private StorageProviderInterface storage;
     private ConfigurationHelper configurationHelper;
 
+    private Project project;
     private Process process;
     private Ruleset ruleset;
     private Prefs rulesetPreferences;
@@ -75,8 +79,13 @@ public class RenameFilesPluginTest {
         rulesetPreferences = mock(Prefs.class);
         ruleset = mock(Ruleset.class);
         when(ruleset.getPreferences()).thenReturn(rulesetPreferences);
+        project = mock(Project.class);
+        when(project.getId()).thenReturn(DEFAULT_PROJECT_ID);
         process = mock(Process.class);
+        when(process.getMetadataFilePath()).thenReturn("");
         when(process.getId()).thenReturn(DEFAULT_PROCESS_ID);
+        when(process.getTitel()).thenReturn(DEFAULT_PROCESS_TITLE);
+        when(process.getProjekt()).thenReturn(project);
         when(process.getRegelsatz()).thenReturn(ruleset);
         when(process.getImagesDirectory()).thenReturn(DEFAULT_PROCESS_IMAGES_DIRECTORY);
         when(process.getImagesOrigDirectory(false)).thenReturn(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY);
@@ -96,7 +105,8 @@ public class RenameFilesPluginTest {
 
         configurationHelper = mock(ConfigurationHelper.class);
         setupConfigurationHelperMocking(configurationHelper);
-
+        when(configurationHelper.getGoobiFolder()).thenReturn("");
+        when(configurationHelper.getScriptsFolder()).thenReturn("");
     }
 
     private void setupConfigurationFileMocking(SubnodeConfiguration config) {
@@ -320,6 +330,63 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00004.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00005.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00006.xml"));
+
+        mockDefaultRenamingFoldersExist(true);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void onlySingleVariableRenamingFormatConfigured_expectCorrectFileRenaming() throws ConfigurationException, IOException {
+        setupPluginConfiguration("variable-only_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "001.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "001.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "001.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + ".jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + ".tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + ".xml"));
+
+        mockDefaultRenamingFoldersExist(true);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void mixedVariableCounterStaticRenamingFormatConfiguredWithStartValue_renameMultipleFolders_expectCorrectFileRenaming()
+            throws ConfigurationException, IOException {
+        setupPluginConfiguration("mixed-variable-static-counter-with-startValue_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00004.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00005.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00006.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00004.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00005.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00006.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00004.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00005.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00006.xml"));
 
         mockDefaultRenamingFoldersExist(true);
         mockStorageFilePresence(oldFiles);

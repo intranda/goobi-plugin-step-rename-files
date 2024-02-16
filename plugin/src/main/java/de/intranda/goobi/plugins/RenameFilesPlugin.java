@@ -75,11 +75,48 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private Map<String, Map<String, String>> renamingLog = new HashMap<>();
 
     // ###################################################################################
+    // # Required plugin methods
+    // ###################################################################################
+
+    @Override
+    public HashMap<String, StepReturnValue> validate() {
+        return null; // NOSONAR
+    }
+
+    @Override
+    public int getInterfaceVersion() {
+        return 0;
+    }
+
+    @Override
+    public String cancel() {
+        return returnPath;
+    }
+
+    @Override
+    public boolean execute() {
+        return PluginReturnValue.FINISH.equals(run());
+    }
+
+    @Override
+    public String finish() {
+        return returnPath;
+    }
+
+    @Override
+    public String getPagePath() {
+        return null;
+    }
+
+    // ###################################################################################
+    // # Name formatter classes
+    // ###################################################################################
 
     class RenamingFormatter {
         @NonNull
         private final List<NamePart> nameParts;
         @NonNull
+        @Getter
         private final VariableReplacer variableReplacer;
         @Getter
         private final int startValue;
@@ -185,6 +222,28 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
+    class VariableNamePart extends NamePart {
+        private VariableReplacer variableReplacer;
+        private String rawString;
+
+        public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString) {
+            super(replacements, conditions);
+            this.rawString = rawString;
+        }
+
+        @Override
+        String generateNamePart(String oldName) {
+            return variableReplacer.replace(rawString);
+        }
+
+        @Override
+        void reset(RenamingFormatter parent) {
+            variableReplacer = parent.getVariableReplacer();
+        }
+    }
+
+    // ###################################################################################
+    // # Plugin initialization and formatter setup
     // ###################################################################################
 
     @Override
@@ -193,9 +252,10 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         this.step = step;
         this.process = step.getProzess();
         this.returnPath = returnPath;
-        SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
         // TODO: Plugin initialization should also throw exceptions!
         try {
+            this.variableReplacer = getVariableReplacer();
+            SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
             loadPluginConfiguration(myconfig);
         } catch (PluginException e) {
             log.error(e.getMessage());
@@ -203,6 +263,16 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
         this.property = initializeProcessProperty(step.getProzess());
         this.renamingLog = deserializeRenamingLogFromJson(this.property.getWert());
+    }
+
+    private VariableReplacer getVariableReplacer() throws PluginException {
+        try {
+            Fileformat fileformat = process.readMetadataFile();
+            return new VariableReplacer(fileformat != null ? fileformat.getDigitalDocument() : null,
+                    process.getRegelsatz().getPreferences(), process, step);
+        } catch (ReadException | IOException | SwapException | PreferencesException e1) {
+            throw new PluginException("Errors happened while trying to initialize the Fileformat and VariableReplacer", e1);
+        }
     }
 
     private void loadPluginConfiguration(SubnodeConfiguration config) throws PluginException {
@@ -237,6 +307,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                 return new StaticNamePart(replacements, conditions, value);
             case "counter":
                 return new CounterNamePart(replacements, conditions, value);
+            case "variable":
+                return new VariableNamePart(replacements, conditions, value);
             default:
                 throw new IllegalArgumentException("Unable to parse namepart configuration of type \"" + type + "\"!");
         }
@@ -291,42 +363,13 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return gson.toJson(renamingLog);
     }
 
-    @Override
-    public HashMap<String, StepReturnValue> validate() {
-        return null; // NOSONAR
-    }
-
-    @Override
-    public int getInterfaceVersion() {
-        return 0;
-    }
-
-    @Override
-    public String cancel() {
-        return returnPath;
-    }
-
-    @Override
-    public boolean execute() {
-        return PluginReturnValue.FINISH.equals(run());
-    }
-
-    @Override
-    public String finish() {
-        return returnPath;
-    }
-
-    @Override
-    public String getPagePath() {
-        return null;
-    }
-
+    // ###################################################################################
+    // # Renaming Algorithm
     // ###################################################################################
 
     @Override
     public PluginReturnValue run() {
         try {
-            variableReplacer = getVariableReplacer();
             List<Path> foldersToRename = determineFoldersToRename();
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
             performRenaming(renamingMapping);
@@ -337,16 +380,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         return PluginReturnValue.FINISH;
-    }
-
-    private VariableReplacer getVariableReplacer() throws PluginException {
-        try {
-            Fileformat fileformat = process.readMetadataFile();
-            return new VariableReplacer(fileformat != null ? fileformat.getDigitalDocument() : null,
-                    process.getRegelsatz().getPreferences(), process, step);
-        } catch (ReadException | IOException | SwapException | PreferencesException e1) {
-            throw new PluginException("Errors happened while trying to initialize the Fileformat and VariableReplacer", e1);
-        }
     }
 
     private List<Path> determineFoldersToRename() throws IOException, SwapException, DAOException {
