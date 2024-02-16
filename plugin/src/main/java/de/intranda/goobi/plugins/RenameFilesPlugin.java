@@ -408,7 +408,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         for (String folderSpecification : configuredFoldersToRename) {
             result.addAll(determineRealPathsForConfiguredFolder(folderSpecification));
         }
-        return result;
+        return result.stream().distinct().collect(Collectors.toList());
     }
 
     private List<Path> determineRealPathsForConfiguredFolder(String configuredFolder) throws IOException, SwapException, DAOException {
@@ -426,7 +426,10 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                 Paths.get(process.getOcrAltoDirectory()),
                 Paths.get(process.getOcrPdfDirectory()),
                 Paths.get(process.getOcrTxtDirectory()),
-                Paths.get(process.getOcrXmlDirectory()));
+                Paths.get(process.getOcrXmlDirectory()))
+                .stream()
+                .filter(this::pathIsPresent)
+                .collect(Collectors.toList());
     }
 
     private List<Path> transformConfiguredFolderSpecificationToRealPath(String folderSpecification) throws IOException, SwapException {
@@ -434,6 +437,10 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         folder = variableReplacer.replace(folder);
         Path configuredFolder = Paths.get(process.getImagesDirectory(), folder);
         return List.of(configuredFolder);
+    }
+
+    private boolean pathIsPresent(Path path) {
+        return StorageProvider.getInstance().isDirectory(path);
     }
 
     private Map<Path, Path> determineRenamingForAllFilesInAllFolders(List<Path> foldersToRename) throws PluginException {

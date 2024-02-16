@@ -193,6 +193,13 @@ public class RenameFilesPluginTest {
         when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY))).thenReturn(doExist);
     }
 
+    private void mockStorageFileParentPathPresence(List<Path> files) {
+        files.stream()
+                .map(f -> f.getParent())
+                .distinct()
+                .forEach(p -> when(storage.isDirectory(p)).thenReturn(true));
+    }
+
     private void mockStorageFilePresence(List<Path> files) {
         Map<Path, List<Path>> directoryFileMapping = new HashMap<>();
         for (Path file : files) {
@@ -239,7 +246,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "STATIC.tif"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "STATIC.xml"));
 
-        mockDefaultRenamingFoldersExist(true);
+        mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
@@ -261,7 +268,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"),
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"));
 
-        mockDefaultRenamingFoldersExist(true);
+        mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
@@ -296,7 +303,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00002.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00003.xml"));
 
-        mockDefaultRenamingFoldersExist(true);
+        mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
@@ -331,7 +338,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00005.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00006.xml"));
 
-        mockDefaultRenamingFoldersExist(true);
+        mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
@@ -353,7 +360,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + ".tif"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + ".xml"));
 
-        mockDefaultRenamingFoldersExist(true);
+        mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
@@ -388,7 +395,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00005.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00006.xml"));
 
-        mockDefaultRenamingFoldersExist(true);
+        mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
@@ -423,7 +430,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02_SUFFIX.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03_SUFFIX.xml"));
 
-        mockDefaultRenamingFoldersExist(true);
+        mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
