@@ -54,6 +54,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private static final String NAME_PART_TYPE_COUNTER = "counter";
     private static final String NAME_PART_TYPE_VARIABLE = "variable";
     private static final String NAME_PART_TYPE_ORIGINAL_FILE_NAME = "originalfilename";
+    private static final String CUSTOM_VARIABLE_ORIGINAL_FILE_NAME = "{" + NAME_PART_TYPE_ORIGINAL_FILE_NAME + "}";
 
     private static Gson gson = new Gson();
     private static ConfigurationHelper configurationHelper = ConfigurationHelper.getInstance();
@@ -115,17 +116,37 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     // # Name formatter classes
     // ###################################################################################
 
+    class OverlayVariableReplacer {
+        private final VariableReplacer variableReplacer;
+
+        public OverlayVariableReplacer(VariableReplacer variableReplacer) {
+            this.variableReplacer = variableReplacer;
+        }
+
+        public String replace(String fileName, String replacement) {
+            replacement = internalReplacer(fileName, replacement);
+            return variableReplacer.replace(replacement);
+        }
+
+        private String internalReplacer(String fileName, String replacement) {
+            if (CUSTOM_VARIABLE_ORIGINAL_FILE_NAME.equals(replacement)) {
+                return fileName;
+            }
+            return replacement;
+        }
+    }
+
     class RenamingFormatter {
         @NonNull
         private final List<NamePart> nameParts;
         @NonNull
         @Getter
-        private final VariableReplacer variableReplacer;
+        private final OverlayVariableReplacer replacer;
         @Getter
         private final int startValue;
 
-        public RenamingFormatter(VariableReplacer variableReplacer, List<NamePart> nameParts, int startValue) {
-            this.variableReplacer = variableReplacer;
+        public RenamingFormatter(OverlayVariableReplacer replacer, List<NamePart> nameParts, int startValue) {
+            this.replacer = replacer;
             this.nameParts = nameParts;
             this.startValue = startValue;
             reset();
@@ -154,7 +175,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         @NonNull
         private List<NamePartCondition> conditions;
 
-        abstract String generateNamePart(String oldName);
+        public String generateNamePart(String oldName) {
+            return generate(oldName);
+        }
+
+        abstract String generate(String oldName);
 
         abstract void reset(RenamingFormatter parent);
     }
@@ -195,7 +220,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        String generateNamePart(String oldName) {
+        String generate(String oldName) {
             return this.staticPart;
         }
 
@@ -215,7 +240,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        String generateNamePart(String oldName) {
+        String generate(String oldName) {
             return format.format(counter++);
         }
 
@@ -226,7 +251,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     class VariableNamePart extends NamePart {
-        private VariableReplacer variableReplacer;
+        private OverlayVariableReplacer replacer;
         private String rawString;
 
         public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString) {
@@ -235,29 +260,13 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        String generateNamePart(String oldName) {
-            return variableReplacer.replace(rawString);
+        String generate(String oldName) {
+            return replacer.replace(oldName, rawString);
         }
 
         @Override
         void reset(RenamingFormatter parent) {
-            variableReplacer = parent.getVariableReplacer();
-        }
-    }
-
-    class OriginalFileNameNamePart extends NamePart {
-        public OriginalFileNameNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions) {
-            super(replacements, conditions);
-        }
-
-        @Override
-        String generateNamePart(String oldName) {
-            return oldName;
-        }
-
-        @Override
-        void reset(RenamingFormatter parent) {
-            // TODO: Determine reset
+            replacer = parent.getReplacer();
         }
     }
 
@@ -308,7 +317,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                     .stream()
                     .map(this::parseNamePartConfiguration)
                     .collect(Collectors.toList());
-            renamingFormatter = new RenamingFormatter(variableReplacer, nameParts, counterStartValue);
+            renamingFormatter = new RenamingFormatter(new OverlayVariableReplacer(getVariableReplacer()), nameParts, counterStartValue);
         } catch (IllegalArgumentException e) {
             throw new PluginException("Error during namepart parsing!", e);
         }
@@ -329,7 +338,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             case NAME_PART_TYPE_VARIABLE:
                 return new VariableNamePart(replacements, conditions, value);
             case NAME_PART_TYPE_ORIGINAL_FILE_NAME:
-                return new OriginalFileNameNamePart(replacements, conditions);
+                return new VariableNamePart(replacements, conditions, CUSTOM_VARIABLE_ORIGINAL_FILE_NAME);
             default:
                 throw new IllegalArgumentException("Unable to parse namepart configuration of type \"" + type + "\"!");
         }
