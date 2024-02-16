@@ -56,9 +56,9 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private static final String NAME_PART_TYPE_ORIGINAL_FILE_NAME = "originalfilename";
     private static final String CUSTOM_VARIABLE_ORIGINAL_FILE_NAME = "{" + NAME_PART_TYPE_ORIGINAL_FILE_NAME + "}";
 
-    private static Gson gson = new Gson();
-    private static ConfigurationHelper configurationHelper = ConfigurationHelper.getInstance();
-    private static MetsFileUpdater metsFileUpdater = MetsFileUpdater.getInstance();
+    private Gson gson = new Gson();
+    private ConfigurationHelper configurationHelper = ConfigurationHelper.getInstance();
+    private MetsFileUpdater metsFileUpdater = MetsFileUpdater.getInstance();
 
     @Getter
     private String title = "intranda_step_rename_files";
@@ -408,6 +408,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             if (updateMetsFile) {
                 metsFileUpdater.updateMetsFile(null, null);
             }
+            System.out.println(metsFileUpdater);
         } catch (IOException | PluginException | SwapException | DAOException e) {
             log.error(e.getMessage());
             log.error(e);

@@ -66,6 +66,7 @@ public class RenameFilesPluginTest {
     private SubnodeConfiguration pluginConfiguration;
     private StorageProviderInterface storage;
     private ConfigurationHelper configurationHelper;
+    private MetsFileUpdater metsFileUpdater;
 
     private Project project;
     private Process process;
@@ -109,6 +110,9 @@ public class RenameFilesPluginTest {
         setupConfigurationHelperMocking(configurationHelper);
         when(configurationHelper.getGoobiFolder()).thenReturn("");
         when(configurationHelper.getScriptsFolder()).thenReturn("");
+
+        metsFileUpdater = mock(MetsFileUpdater.class);
+        setupMetsFileUpdaterMocking(metsFileUpdater);
     }
 
     private void setupConfigurationFileMocking(SubnodeConfiguration config) {
@@ -592,8 +596,6 @@ public class RenameFilesPluginTest {
     @Test
     public void mixedStaticCounterWithMetsFileUpdate_renameMultipleFolders_expectMetsFileUpdaterCall()
             throws ConfigurationException, IOException {
-        MetsFileUpdater metsFileUpdater = mock(MetsFileUpdater.class);
-        setupMetsFileUpdaterMocking(metsFileUpdater);
         setupPluginConfiguration("mets-file-update");
         initializate();
 
