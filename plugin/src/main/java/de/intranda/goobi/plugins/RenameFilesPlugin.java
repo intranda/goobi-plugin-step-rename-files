@@ -476,20 +476,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             int extensionIndex = oldFullFileName.lastIndexOf(".");
             String fileExtension = oldFullFileName.substring(extensionIndex + 1);
             String oldFileName = oldFullFileName.substring(0, extensionIndex);
-
             String newFullFileName = renamingFormatter.generateNewName(oldFileName) + "." + fileExtension;
 
-            // TODO: Check this barcode logic?!
-            //            if (oldFileName.contains("barcode")) {
-            //                //    rename it with '0' as counter
-            //                fileName = generateNewFileName(oldFileName, 0, extension);
-            //            } else {
-            //                // create new filename
-            //                fileName = generateNewFileName(oldFileName, counter, extension);
-            //                counter++;
-            //            }
-
-            // Only rename if not changed
             if (!oldFullFileName.equals(newFullFileName)) {
                 result.put(Paths.get(folder.toString(), oldFullFileName), Paths.get(folder.toString(), newFullFileName));
             }
