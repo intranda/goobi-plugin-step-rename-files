@@ -1,11 +1,9 @@
 package de.intranda.goobi.plugins;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.io.FilenameUtils;
 import org.goobi.beans.Process;
 
 import de.sub.goobi.helper.exceptions.SwapException;
@@ -18,14 +16,23 @@ import ugh.exceptions.ReadException;
 import ugh.exceptions.WriteException;
 
 public class MetsFileUpdater {
+    private static MetsFileUpdater instance;
+
+    public static synchronized MetsFileUpdater getInstance() {
+        if (instance == null) {
+            instance = new MetsFileUpdater();
+        }
+        return instance;
+    }
 
     /**
      * update information of ContentFiles' locations in the METS file
      * 
+     * @param process Process
      * @param namesMap Map from old names to new names
      * @return true if the METS file is updated successfully, false if any error should occur
      */
-    public void updateMetsFile(Process process, Map<String, String> filenameMap) throws IOException {
+    public void updateMetsFile(Process process, Map<String, String> namesMap) throws IOException {
         try {
             Fileformat fileformat = process.readMetadataFile();
             DigitalDocument dd = fileformat.getDigitalDocument();
@@ -37,7 +44,7 @@ public class MetsFileUpdater {
                 String locationPrefix = oldLocation.substring(0, fileNameStartIndex);
 
                 String oldFileName = oldLocation.substring(fileNameStartIndex);
-                String newFileName = getNewFileName(oldFileName, filenameMap);
+                String newFileName = getNewFileName(oldFileName, namesMap);
                 String newLocation = locationPrefix.concat(newFileName);
                 file.setLocation(newLocation);
             }
@@ -66,13 +73,4 @@ public class MetsFileUpdater {
             return oldFileName;
         }
     }
-
-    public static String getBasename(String filename) {
-        return FilenameUtils.getBaseName(Path.of(filename).getFileName().toString());
-    }
-
-    public static String getBasename(Path path) {
-        return FilenameUtils.getBaseName(path.getFileName().toString());
-    }
-
 }

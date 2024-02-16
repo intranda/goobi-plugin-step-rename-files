@@ -45,7 +45,7 @@ import de.sub.goobi.persistence.managers.PropertyManager;
 import ugh.dl.Prefs;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({ ConfigurationHelper.class, ConfigPlugins.class, PropertyManager.class, StorageProvider.class })
+@PrepareForTest({ MetsFileUpdater.class, ConfigurationHelper.class, ConfigPlugins.class, PropertyManager.class, StorageProvider.class })
 @PowerMockIgnore({ "javax.management.*" })
 public class RenameFilesPluginTest {
     private static final String DEFAULT_PROCESS_IMAGES_DIRECTORY = "/opt/digiverso/goobi/metadata/1/images";
@@ -141,6 +141,14 @@ public class RenameFilesPluginTest {
                 .andReturn(configurationHelper)
                 .anyTimes();
         replay(ConfigurationHelper.class);
+    }
+
+    private void setupMetsFileUpdaterMocking(MetsFileUpdater metsFileUpdater) {
+        mockStatic(MetsFileUpdater.class);
+        expect(MetsFileUpdater.getInstance())
+                .andReturn(metsFileUpdater)
+                .anyTimes();
+        replay(MetsFileUpdater.class);
     }
 
     private void initializate() {
@@ -579,5 +587,42 @@ public class RenameFilesPluginTest {
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
         expectRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void mixedStaticCounterWithMetsFileUpdate_renameMultipleFolders_expectMetsFileUpdaterCall()
+            throws ConfigurationException, IOException {
+        MetsFileUpdater metsFileUpdater = mock(MetsFileUpdater.class);
+        setupMetsFileUpdaterMocking(metsFileUpdater);
+        setupPluginConfiguration("mets-file-update");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "FILE_0001.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "FILE_0002.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "FILE_0003.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "FILE_0001.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "FILE_0002.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "FILE_0003.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0001.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0002.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0003.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verify(metsFileUpdater, times(1)).updateMetsFile(null, null);
     }
 }

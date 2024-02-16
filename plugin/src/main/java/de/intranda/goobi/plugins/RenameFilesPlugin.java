@@ -58,6 +58,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     private static Gson gson = new Gson();
     private static ConfigurationHelper configurationHelper = ConfigurationHelper.getInstance();
+    private static MetsFileUpdater metsFileUpdater = MetsFileUpdater.getInstance();
 
     @Getter
     private String title = "intranda_step_rename_files";
@@ -76,6 +77,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private List<String> configuredFoldersToRename;
     private RenamingFormatter renamingFormatter;
 
+    private boolean updateMetsFile;
     private Map<String, Map<String, String>> renamingLog = new HashMap<>();
 
     // ###################################################################################
@@ -195,7 +197,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
-    @Data
     @RequiredArgsConstructor
     class NamePartCondition {
         public boolean matches(OverlayVariableReplacer replacer, String oldName) {
@@ -209,7 +210,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         private String matches;
     }
 
-    @Data
     @RequiredArgsConstructor
     class NamePartReplacement {
         public String replace(String value) {
@@ -322,7 +322,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         } catch (IllegalArgumentException e) {
             throw new PluginException("Error during namepart parsing!", e);
         }
-        //        this.updateMetsFile = config.getBoolean("metsFile/update", false);
+
+        this.updateMetsFile = config.getBoolean("metsFile/update", false);
     }
 
     private NamePart parseNamePartConfiguration(HierarchicalConfiguration namePartXML) throws IllegalArgumentException {
@@ -404,6 +405,9 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             List<Path> foldersToRename = determineFoldersToRename();
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
             performRenaming(renamingMapping);
+            if (updateMetsFile) {
+                metsFileUpdater.updateMetsFile(null, null);
+            }
         } catch (IOException | PluginException | SwapException | DAOException e) {
             log.error(e.getMessage());
             log.error(e);
