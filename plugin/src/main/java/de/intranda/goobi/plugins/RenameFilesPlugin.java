@@ -176,7 +176,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         private List<NamePartCondition> conditions;
 
         public String generateNamePart(String oldName) {
-            return generate(oldName);
+            String result = generate(oldName);
+            for (NamePartReplacement r : replacements) {
+                result = r.replace(result);
+            }
+            return result;
         }
 
         abstract String generate(String oldName);
