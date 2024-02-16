@@ -238,7 +238,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void onlySingleCounterRenamingFormatConfigured_expectCorrectFileRenaming() throws ConfigurationException, IOException {
+    public void onlySingleCounterRenamingFormatConfigured_renameOneFolderOnly_expectCorrectFileRenaming() throws ConfigurationException, IOException {
         setupPluginConfiguration("counter-only_renaming_star");
         initializate();
 
@@ -250,6 +250,76 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00001.jpg"),
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"),
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"));
+
+        mockDefaultRenamingFoldersExist(true);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void onlySingleCounterRenamingFormatConfigured_renameMultipleFolders_expectCorrectFileRenaming()
+            throws ConfigurationException, IOException {
+        setupPluginConfiguration("counter-only_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00001.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00001.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00002.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00003.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00001.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00002.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00003.xml"));
+
+        mockDefaultRenamingFoldersExist(true);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void onlySingleCounterRenamingFormatConfiguredWithStartValue_renameMultipleFolders_expectCorrectFileRenaming()
+            throws ConfigurationException, IOException {
+        setupPluginConfiguration("counter-only-with-startValue_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00004.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00005.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00006.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00004.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00005.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00006.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00004.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00005.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00006.xml"));
 
         mockDefaultRenamingFoldersExist(true);
         mockStorageFilePresence(oldFiles);

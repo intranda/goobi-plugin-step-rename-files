@@ -6,14 +6,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import org.apache.commons.collections4.list.TreeList;
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.goobi.beans.Process;
@@ -35,7 +34,6 @@ import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
 import de.sub.goobi.persistence.managers.PropertyManager;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
@@ -72,34 +70,58 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     private VariableReplacer variableReplacer;
     private List<String> configuredFoldersToRename;
-    private List<NamePartConfiguration> renamingConfigurations;
+    private RenamingFormatter renamingFormatter;
 
     private Map<String, Map<String, String>> renamingLog = new HashMap<>();
 
     // ###################################################################################
 
+    class RenamingFormatter {
+        @NonNull
+        private final List<NamePart> nameParts;
+        @NonNull
+        private final VariableReplacer variableReplacer;
+        @Getter
+        private final int startValue;
+
+        public RenamingFormatter(VariableReplacer variableReplacer, List<NamePart> nameParts, int startValue) {
+            this.variableReplacer = variableReplacer;
+            this.nameParts = nameParts;
+            this.startValue = startValue;
+            reset();
+        }
+
+        public void reset() {
+            nameParts.stream().forEach(np -> np.reset(this));
+        }
+
+        public String generateNewName(String oldName) {
+            StringBuilder sb = new StringBuilder();
+            nameParts.stream().forEachOrdered(np -> sb.append(np.generateNamePart(oldName)));
+            return sb.toString();
+        }
+    }
+
     @Data
     @RequiredArgsConstructor
-    @AllArgsConstructor
-    public class NamePartConfiguration {
+    abstract class NamePart {
         public boolean allConditionsMatch(VariableReplacer replacer) {
             return this.conditions.stream().allMatch(c -> c.matches(replacer));
         }
 
         @NonNull
-        private String namePartValue;
+        private List<NamePartReplacement> replacements;
         @NonNull
-        private String namePartType;
-        @NonNull
-        private List<ReplacementConfiguration> replacements;
-        @NonNull
-        private List<ConditionConfiguration> conditions;
-        private NumberFormat format;
+        private List<NamePartCondition> conditions;
+
+        abstract String generateNamePart(String oldName);
+
+        abstract void reset(RenamingFormatter parent);
     }
 
     @Data
     @RequiredArgsConstructor
-    public class ConditionConfiguration {
+    class NamePartCondition {
         public boolean matches(VariableReplacer replacer) {
             String replacedValue = replacer.replace(value);
             return replacedValue.matches(matches);
@@ -113,7 +135,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     @Data
     @RequiredArgsConstructor
-    public class ReplacementConfiguration {
+    class NamePartReplacement {
         public String replace(String value) {
             return value.replaceAll(regex, replacement);
         }
@@ -122,6 +144,45 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         private String regex;
         @NonNull
         private String replacement;
+    }
+
+    class StaticNamePart extends NamePart {
+        private String staticPart;
+
+        public StaticNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String staticPart) {
+            super(replacements, conditions);
+            this.staticPart = staticPart;
+        }
+
+        @Override
+        String generateNamePart(String oldName) {
+            return this.staticPart;
+        }
+
+        @Override
+        void reset(RenamingFormatter parent) {
+            // Static name parts have no state to reset
+        }
+    }
+
+    class CounterNamePart extends NamePart {
+        private NumberFormat format;
+        private int counter = 1;
+
+        public CounterNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String format) {
+            super(replacements, conditions);
+            this.format = new DecimalFormat(format);
+        }
+
+        @Override
+        String generateNamePart(String oldName) {
+            return format.format(counter++);
+        }
+
+        @Override
+        void reset(RenamingFormatter parent) {
+            this.counter = parent.getStartValue();
+        }
     }
 
     // ###################################################################################
@@ -133,50 +194,66 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         this.process = step.getProzess();
         this.returnPath = returnPath;
         SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        loadPluginConfiguration(myconfig);
+        // TODO: Plugin initialization should also throw exceptions!
+        try {
+            loadPluginConfiguration(myconfig);
+        } catch (PluginException e) {
+            log.error(e.getMessage());
+            log.error(e);
+        }
         this.property = initializeProcessProperty(step.getProzess());
         this.renamingLog = deserializeRenamingLogFromJson(this.property.getWert());
     }
 
-    private void loadPluginConfiguration(SubnodeConfiguration config) {
+    private void loadPluginConfiguration(SubnodeConfiguration config) throws PluginException {
         configuredFoldersToRename = config.getList("folder", List.of("*"))
                 .stream()
                 .map(Object::toString)
                 .collect(Collectors.toList());
         log.debug("configuredFoldersToRename = " + configuredFoldersToRename);
 
-        // TODO: Stream map
-        renamingConfigurations = new ArrayList<>();
-        config.configurationsAt("namepart")
-                .stream()
-                .forEachOrdered(namePartConfigXML -> {
-                    NamePartConfiguration npc = new NamePartConfiguration(namePartConfigXML.getString("."),
-                            namePartConfigXML.getString("@type", "static"),
-                            parseReplacements(namePartConfigXML.configurationsAt("replace")),
-                            parseConditions(namePartConfigXML.configurationsAt("condition")));
-                    renamingConfigurations.add(npc);
-                });
-        for (NamePartConfiguration npc : renamingConfigurations) {
-            if ("counter".equalsIgnoreCase(npc.getNamePartType())) {
-                npc.setFormat(new DecimalFormat(npc.getNamePartValue()));
-            }
+        int counterStartValue = config.getInt("startValue", 1);
+
+        try {
+            List<NamePart> nameParts = config.configurationsAt("namepart")
+                    .stream()
+                    .map(this::parseNamePartConfiguration)
+                    .collect(Collectors.toList());
+            renamingFormatter = new RenamingFormatter(variableReplacer, nameParts, counterStartValue);
+        } catch (IllegalArgumentException e) {
+            throw new PluginException("Error during namepart parsing!", e);
         }
         //        this.updateMetsFile = config.getBoolean("metsFile/update", false);
-        //        startValue = config.getInt("startValue", 1);
     }
 
-    private @NonNull List<ReplacementConfiguration> parseReplacements(
+    private NamePart parseNamePartConfiguration(HierarchicalConfiguration namePartXML) throws IllegalArgumentException {
+        String type = namePartXML.getString("@type");
+        String value = namePartXML.getString(".");
+        List<NamePartReplacement> replacements = parseReplacements(namePartXML.configurationsAt("replace"));
+        List<NamePartCondition> conditions = parseConditions(namePartXML.configurationsAt("condition"));
+
+        switch (type) {
+            case "static":
+                return new StaticNamePart(replacements, conditions, value);
+            case "counter":
+                return new CounterNamePart(replacements, conditions, value);
+            default:
+                throw new IllegalArgumentException("Unable to parse namepart configuration of type \"" + type + "\"!");
+        }
+    }
+
+    private @NonNull List<NamePartReplacement> parseReplacements(
             List<HierarchicalConfiguration> replacementConfigs) {
         return replacementConfigs.stream()
-                .map(config -> new ReplacementConfiguration(config.getString("@regex", ""),
+                .map(config -> new NamePartReplacement(config.getString("@regex", ""),
                         config.getString("@replacement", "")))
                 .collect(Collectors.toList());
     }
 
-    private @NonNull List<ConditionConfiguration> parseConditions(List<HierarchicalConfiguration> configs) {
+    private @NonNull List<NamePartCondition> parseConditions(List<HierarchicalConfiguration> configs) {
         return configs.stream()
                 .map(
-                        config -> new ConditionConfiguration(config.getString("@value", ""), config.getString("@matches", "")))
+                        config -> new NamePartCondition(config.getString("@value", ""), config.getString("@matches", "")))
                 .collect(Collectors.toList());
     }
 
@@ -273,7 +350,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     private List<Path> determineFoldersToRename() throws IOException, SwapException, DAOException {
-        List<Path> result = new TreeList<>();
+        List<Path> result = new LinkedList<>();
         for (String folderSpecification : configuredFoldersToRename) {
             result.addAll(determineRealPathsForConfiguredFolder(folderSpecification));
         }
@@ -321,16 +398,17 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         Map<Path, Path> result = new TreeMap<>();
 
         List<Path> filesToRename = StorageProvider.getInstance().listFiles(folder.toString());
+        renamingFormatter.reset();
 
-        int counter = 1;
         for (Path file : filesToRename) {
             String oldFullFileName = file.getFileName().toString();
             int extensionIndex = oldFullFileName.lastIndexOf(".");
             String fileExtension = oldFullFileName.substring(extensionIndex + 1);
             String oldFileName = oldFullFileName.substring(0, extensionIndex);
 
-            String newFullFileName = generateNewFileName(oldFileName, counter) + "." + fileExtension;
+            String newFullFileName = renamingFormatter.generateNewName(oldFileName) + "." + fileExtension;
 
+            // TODO: Check this barcode logic?!
             //            if (oldFileName.contains("barcode")) {
             //                //    rename it with '0' as counter
             //                fileName = generateNewFileName(oldFileName, 0, extension);
@@ -339,7 +417,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             //                fileName = generateNewFileName(oldFileName, counter, extension);
             //                counter++;
             //            }
-            counter++;
 
             // Only rename if not changed
             if (!oldFullFileName.equals(newFullFileName)) {
@@ -348,20 +425,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         return result;
-    }
-
-    private String generateNewFileName(String fileName, int counter) {
-        StringBuilder sb = new StringBuilder();
-
-        for (NamePartConfiguration npc : renamingConfigurations) {
-            if (npc.getFormat() != null) {
-                sb.append(npc.getFormat().format(counter));
-            } else {
-                sb.append(npc.getNamePartValue());
-            }
-        }
-
-        return sb.toString();
     }
 
     private void performRenaming(Map<Path, Path> renamingMap) throws IOException {
