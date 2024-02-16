@@ -57,8 +57,9 @@ public class RenameFilesPluginTest {
     private static final String DEFAULT_PROCESS_OCR_XML_DIRECTORY = "/opt/digiverso/goobi/metadata/1/images/xml";
 
     private static final String DEFAULT_RETURN_PAGE = "pageBefore";
-    private static final String DEFAULT_PROCESS_TITLE = "TestProcess_123";
+    private static final String DEFAULT_PROJECT_TITLE = "ProjectABC";
     private static final int DEFAULT_PROJECT_ID = 1;
+    private static final String DEFAULT_PROCESS_TITLE = "TestProcess_123";
     private static final int DEFAULT_PROCESS_ID = 1;
 
     private Processproperty processProperty;
@@ -81,6 +82,7 @@ public class RenameFilesPluginTest {
         when(ruleset.getPreferences()).thenReturn(rulesetPreferences);
         project = mock(Project.class);
         when(project.getId()).thenReturn(DEFAULT_PROJECT_ID);
+        when(project.getTitel()).thenReturn(DEFAULT_PROJECT_TITLE);
         process = mock(Process.class);
         when(process.getMetadataFilePath()).thenReturn("");
         when(process.getId()).thenReturn(DEFAULT_PROCESS_ID);
@@ -465,6 +467,76 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, projectTitleSuffix + "_0001.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, projectTitleSuffix + "_0002.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, projectTitleSuffix + "_0003.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void mixedVariableStaticCounterWithConditionMatching_renameMultipleFolders_expectCorrectFileRenaming()
+            throws ConfigurationException, IOException {
+        setupPluginConfiguration("mixed-variable-static-counter-with-condition_match_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0001.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0002.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0003.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0001.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0002.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0003.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0001.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0002.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_0003.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void mixedVariableStaticCounterWithConditionNotMatching_renameMultipleFolders_expectCorrectFileRenaming()
+            throws ConfigurationException, IOException {
+        setupPluginConfiguration("mixed-variable-static-counter-with-condition_no-match_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "_0001.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "_0002.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "_0003.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "_0001.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "_0002.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "_0003.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "_0001.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "_0002.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "_0003.xml"));
 
         mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);

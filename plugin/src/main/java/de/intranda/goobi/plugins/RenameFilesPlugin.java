@@ -166,8 +166,10 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     @Data
     @RequiredArgsConstructor
     abstract class NamePart {
-        public boolean allConditionsMatch(VariableReplacer replacer) {
-            return this.conditions.stream().allMatch(c -> c.matches(replacer));
+        private OverlayVariableReplacer replacer;
+
+        public boolean allConditionsMatch(String oldName) {
+            return this.conditions.stream().allMatch(c -> c.matches(replacer, oldName));
         }
 
         @NonNull
@@ -176,6 +178,9 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         private List<NamePartCondition> conditions;
 
         public String generateNamePart(String oldName) {
+            if (!allConditionsMatch(oldName)) {
+                return "";
+            }
             String result = generate(oldName);
             for (NamePartReplacement r : replacements) {
                 result = r.replace(result);
@@ -183,16 +188,18 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             return result;
         }
 
-        abstract String generate(String oldName);
+        protected abstract String generate(String oldName);
 
-        abstract void reset(RenamingFormatter parent);
+        protected void reset(RenamingFormatter parent) {
+            this.replacer = parent.getReplacer();
+        }
     }
 
     @Data
     @RequiredArgsConstructor
     class NamePartCondition {
-        public boolean matches(VariableReplacer replacer) {
-            String replacedValue = replacer.replace(value);
+        public boolean matches(OverlayVariableReplacer replacer, String oldName) {
+            String replacedValue = replacer.replace(oldName, value);
             return replacedValue.matches(matches);
         }
 
@@ -224,13 +231,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        String generate(String oldName) {
+        protected String generate(String oldName) {
             return this.staticPart;
-        }
-
-        @Override
-        void reset(RenamingFormatter parent) {
-            // Static name parts have no state to reset
         }
     }
 
@@ -244,18 +246,17 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        String generate(String oldName) {
+        protected String generate(String oldName) {
             return format.format(counter++);
         }
 
         @Override
-        void reset(RenamingFormatter parent) {
+        protected void reset(RenamingFormatter parent) {
             this.counter = parent.getStartValue();
         }
     }
 
     class VariableNamePart extends NamePart {
-        private OverlayVariableReplacer replacer;
         private String rawString;
 
         public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString) {
@@ -264,13 +265,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        String generate(String oldName) {
-            return replacer.replace(oldName, rawString);
-        }
-
-        @Override
-        void reset(RenamingFormatter parent) {
-            replacer = parent.getReplacer();
+        protected String generate(String oldName) {
+            return getReplacer().replace(oldName, rawString);
         }
     }
 
