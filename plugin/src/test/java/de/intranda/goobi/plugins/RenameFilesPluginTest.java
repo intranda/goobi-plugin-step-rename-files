@@ -12,7 +12,10 @@ import static org.powermock.api.easymock.PowerMock.replay;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.SubnodeConfiguration;
@@ -180,6 +183,20 @@ public class RenameFilesPluginTest {
         when(storage.isDirectory(Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY))).thenReturn(doExist);
     }
 
+    private void mockStorageFilePresence(List<Path> files) {
+        Map<Path, List<Path>> directoryFileMapping = new HashMap<>();
+        for (Path file : files) {
+            Path parent = file.getParent();
+            if (!directoryFileMapping.containsKey(parent)) {
+                directoryFileMapping.put(parent, new LinkedList<>());
+            }
+            directoryFileMapping.get(parent).add(file);
+        }
+        directoryFileMapping.entrySet()
+                .stream()
+                .forEach(e -> when(storage.listFiles(e.getKey().toString())).thenReturn(e.getValue()));
+    }
+
     @Test
     public void noRenamingFormatConfigured_expectPluginSucceeding() throws ConfigurationException {
         setupPluginConfiguration("folder_star");
@@ -213,12 +230,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "STATIC.xml"));
 
         mockDefaultRenamingFoldersExist(true);
-        when(storage.listFiles(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY.toString()))
-                .thenReturn(List.of(oldFiles.get(0)));
-        when(storage.listFiles(DEFAULT_PROCESS_TIF_DIRECTORY.toString()))
-                .thenReturn(List.of(oldFiles.get(1)));
-        when(storage.listFiles(DEFAULT_PROCESS_OCR_XML_DIRECTORY.toString()))
-                .thenReturn(List.of(oldFiles.get(2)));
+        mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
@@ -240,8 +252,7 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"));
 
         mockDefaultRenamingFoldersExist(true);
-        when(storage.listFiles(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY.toString()))
-                .thenReturn(oldFiles);
+        mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
