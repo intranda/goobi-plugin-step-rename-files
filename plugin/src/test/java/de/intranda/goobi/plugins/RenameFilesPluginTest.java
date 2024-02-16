@@ -545,4 +545,39 @@ public class RenameFilesPluginTest {
 
         expectRenamingFromTo(oldFiles, newFiles);
     }
+
+    @Test
+    public void barcodeConfigurationTest_renameMultipleFolders_expectCorrectFileRenaming()
+            throws ConfigurationException, IOException {
+        setupPluginConfiguration("barcode-feature");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_barcode_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIFbarcode_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "barcodec_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "FILE_0001.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "FILE_0000.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "FILE_0002.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "FILE_0001.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "FILE_0000.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "FILE_0002.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0001.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0000.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0002.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
 }

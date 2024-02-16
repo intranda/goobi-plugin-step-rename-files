@@ -252,6 +252,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
         @Override
         protected void reset(RenamingFormatter parent) {
+            super.reset(parent);
             this.counter = parent.getStartValue();
         }
     }
