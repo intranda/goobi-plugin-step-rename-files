@@ -50,7 +50,10 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private static final long serialVersionUID = -5097830334502599546L;
 
     private static final String PROPERTY_TITLE = "plugin_intranda_step_rename_files";
-    private static final String NAME_PART_TYPE_ORIGINALFILENAME = "originalfilename";
+    private static final String NAME_PART_TYPE_STATIC = "static";
+    private static final String NAME_PART_TYPE_COUNTER = "counter";
+    private static final String NAME_PART_TYPE_VARIABLE = "variable";
+    private static final String NAME_PART_TYPE_ORIGINAL_FILE_NAME = "originalfilename";
 
     private static Gson gson = new Gson();
     private static ConfigurationHelper configurationHelper = ConfigurationHelper.getInstance();
@@ -242,6 +245,22 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
+    class OriginalFileNameNamePart extends NamePart {
+        public OriginalFileNameNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions) {
+            super(replacements, conditions);
+        }
+
+        @Override
+        String generateNamePart(String oldName) {
+            return oldName;
+        }
+
+        @Override
+        void reset(RenamingFormatter parent) {
+            // TODO: Determine reset
+        }
+    }
+
     // ###################################################################################
     // # Plugin initialization and formatter setup
     // ###################################################################################
@@ -303,12 +322,14 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         List<NamePartCondition> conditions = parseConditions(namePartXML.configurationsAt("condition"));
 
         switch (type) {
-            case "static":
+            case NAME_PART_TYPE_STATIC:
                 return new StaticNamePart(replacements, conditions, value);
-            case "counter":
+            case NAME_PART_TYPE_COUNTER:
                 return new CounterNamePart(replacements, conditions, value);
-            case "variable":
+            case NAME_PART_TYPE_VARIABLE:
                 return new VariableNamePart(replacements, conditions, value);
+            case NAME_PART_TYPE_ORIGINAL_FILE_NAME:
+                return new OriginalFileNameNamePart(replacements, conditions);
             default:
                 throw new IllegalArgumentException("Unable to parse namepart configuration of type \"" + type + "\"!");
         }

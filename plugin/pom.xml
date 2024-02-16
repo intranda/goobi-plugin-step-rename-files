@@ -42,6 +42,14 @@
         <version>2.22.1</version>
         <configuration>
           <useSystemClassLoader>false</useSystemClassLoader>
+          <argLine>
+			  --add-opens=java.base/java.lang=ALL-UNNAMED
+			  --add-opens=java.xml/jdk.xml.internal=ALL-UNNAMED
+			  --add-opens=java.base/java.util=ALL-UNNAMED
+			  --add-opens=java.base/sun.nio.fs=ALL-UNNAMED
+			  --add-opens=java.base/java.io=ALL-UNNAMED
+			  --add-opens=java.base/java.util.stream=ALL-UNNAMED
+		  </argLine>
         </configuration>
       </plugin>
       <plugin>

@@ -1,0 +1,7 @@
+<config_plugin>
+    <config>
+        <folder>*</folder>
+        <namepart type="originalfilename" />
+        <namepart type="static">_SUFFIX</namepart>
+    </config>
+</config_plugin>

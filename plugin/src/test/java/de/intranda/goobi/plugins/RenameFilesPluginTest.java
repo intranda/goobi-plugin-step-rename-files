@@ -208,7 +208,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void noRenamingFormatConfigured_expectPluginSucceeding() throws ConfigurationException {
+    public void noRenamingFormat_expectPluginSucceeding() throws ConfigurationException {
         setupPluginConfiguration("folder_star");
         initializate();
 
@@ -218,7 +218,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void nonExistingFolderConfigured_expectPluginToFail() throws ConfigurationException {
+    public void nonExistingFolder_expectPluginToFail() throws ConfigurationException {
         setupPluginConfiguration("folder_non-existent");
         initializate();
 
@@ -226,7 +226,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void onlySingleStaticRenamingFormatConfigured_expectCorrectFileRenaming() throws ConfigurationException, IOException {
+    public void onlySingleStatic_expectCorrectFileRenaming() throws ConfigurationException, IOException {
         setupPluginConfiguration("static-only_renaming_star");
         initializate();
 
@@ -248,7 +248,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void onlySingleCounterRenamingFormatConfigured_renameOneFolderOnly_expectCorrectFileRenaming() throws ConfigurationException, IOException {
+    public void onlySingleCounter_renameOneFolderOnly_expectCorrectFileRenaming() throws ConfigurationException, IOException {
         setupPluginConfiguration("counter-only_renaming_star");
         initializate();
 
@@ -270,7 +270,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void onlySingleCounterRenamingFormatConfigured_renameMultipleFolders_expectCorrectFileRenaming()
+    public void onlySingleCounter_renameMultipleFolders_expectCorrectFileRenaming()
             throws ConfigurationException, IOException {
         setupPluginConfiguration("counter-only_renaming_star");
         initializate();
@@ -305,7 +305,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void onlySingleCounterRenamingFormatConfiguredWithStartValue_renameMultipleFolders_expectCorrectFileRenaming()
+    public void onlySingleCounterWithStartValue_renameMultipleFolders_expectCorrectFileRenaming()
             throws ConfigurationException, IOException {
         setupPluginConfiguration("counter-only-with-startValue_renaming_star");
         initializate();
@@ -340,7 +340,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void onlySingleVariableRenamingFormatConfigured_expectCorrectFileRenaming() throws ConfigurationException, IOException {
+    public void onlySingleVariable_expectCorrectFileRenaming() throws ConfigurationException, IOException {
         setupPluginConfiguration("variable-only_renaming_star");
         initializate();
 
@@ -362,7 +362,7 @@ public class RenameFilesPluginTest {
     }
 
     @Test
-    public void mixedVariableCounterStaticRenamingFormatConfiguredWithStartValue_renameMultipleFolders_expectCorrectFileRenaming()
+    public void mixedVariableCounterStaticWithStartValue_renameMultipleFolders_expectCorrectFileRenaming()
             throws ConfigurationException, IOException {
         setupPluginConfiguration("mixed-variable-static-counter-with-startValue_renaming_star");
         initializate();
@@ -387,6 +387,41 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00004.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00005.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00006.xml"));
+
+        mockDefaultRenamingFoldersExist(true);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        expectRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void onlyOriginalFileNameAndStatic_renameMultipleFolders_expectCorrectFileRenaming()
+            throws ConfigurationException, IOException {
+        setupPluginConfiguration("originalfilename-static-suffix_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01_SUFFIX.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02_SUFFIX.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03_SUFFIX.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01_SUFFIX.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02_SUFFIX.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03_SUFFIX.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01_SUFFIX.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02_SUFFIX.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03_SUFFIX.xml"));
 
         mockDefaultRenamingFoldersExist(true);
         mockStorageFilePresence(oldFiles);
