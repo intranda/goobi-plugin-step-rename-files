@@ -1,11 +1,11 @@
 package de.intranda.goobi.plugins;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -25,7 +25,6 @@ import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.config.ConfigurationHelper;
@@ -78,7 +77,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private RenamingFormatter renamingFormatter;
 
     private boolean updateMetsFile;
-    private Map<String, Map<String, String>> renamingLog = new HashMap<>();
+    private OriginalFileNameHistory originalFileNameHistory;
 
     // ###################################################################################
     // # Required plugin methods
@@ -115,6 +114,39 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     // ###################################################################################
+    // # Original File Name History class
+    // ###################################################################################
+
+    class OriginalFileNameHistory {
+        private Map<String, Map<String, String>> perFolderCurrentToOriginalFileNameMapping = new HashMap<>();
+
+        private String extractFolderIdentifier(Path path) {
+            return path.getParent().getFileName().toString() + "_"
+                    + path.getFileName().toString().substring(path.getFileName().toString().lastIndexOf("_") + 1);
+        }
+
+        private String extractFileName(Path path) {
+            return path.getFileName().toString();
+        }
+
+        public String getOriginalFileNameOf(Path currentFilePath) {
+            Map<String, String> folderMapping = getOriginalFileNameMappingOfFolder(extractFolderIdentifier(currentFilePath));
+            String currentFileName = extractFileName(currentFilePath);
+            if (!folderMapping.containsKey(currentFileName)) {
+                return currentFileName;
+            }
+            return folderMapping.get(currentFileName);
+        }
+
+        private Map<String, String> getOriginalFileNameMappingOfFolder(String folderIdentifier) {
+            if (!perFolderCurrentToOriginalFileNameMapping.containsKey(folderIdentifier)) {
+                return Collections.emptyMap();
+            }
+            return perFolderCurrentToOriginalFileNameMapping.get(folderIdentifier);
+        }
+    }
+
+    // ###################################################################################
     // # Name formatter classes
     // ###################################################################################
 
@@ -125,14 +157,17 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             this.variableReplacer = variableReplacer;
         }
 
-        public String replace(String fileName, String replacement) {
+        public String replace(Path fileName, String replacement) {
             replacement = internalReplacer(fileName, replacement);
             return variableReplacer.replace(replacement);
         }
 
-        private String internalReplacer(String fileName, String replacement) {
+        private String internalReplacer(Path fileName, String replacement) {
             if (CUSTOM_VARIABLE_ORIGINAL_FILE_NAME.equals(replacement)) {
-                return fileName;
+                String originalFileName = originalFileNameHistory.getOriginalFileNameOf(fileName);
+                // Remove file extension
+                int fileExtensionIndex = originalFileName.lastIndexOf('.');
+                return originalFileName.substring(0, fileExtensionIndex);
             }
             return replacement;
         }
@@ -158,7 +193,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             nameParts.stream().forEach(np -> np.reset(this));
         }
 
-        public String generateNewName(String oldName) {
+        public String generateNewName(Path oldName) {
             StringBuilder sb = new StringBuilder();
             nameParts.stream().forEachOrdered(np -> sb.append(np.generateNamePart(oldName)));
             return sb.toString();
@@ -170,7 +205,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     abstract class NamePart {
         private OverlayVariableReplacer replacer;
 
-        public boolean allConditionsMatch(String oldName) {
+        public boolean allConditionsMatch(Path oldName) {
             return this.conditions.stream().allMatch(c -> c.matches(replacer, oldName));
         }
 
@@ -179,7 +214,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         @NonNull
         private List<NamePartCondition> conditions;
 
-        public String generateNamePart(String oldName) {
+        public String generateNamePart(Path oldName) {
             if (!allConditionsMatch(oldName)) {
                 return "";
             }
@@ -190,7 +225,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             return result;
         }
 
-        protected abstract String generate(String oldName);
+        protected abstract String generate(Path oldName);
 
         protected void reset(RenamingFormatter parent) {
             this.replacer = parent.getReplacer();
@@ -199,7 +234,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     @RequiredArgsConstructor
     class NamePartCondition {
-        public boolean matches(OverlayVariableReplacer replacer, String oldName) {
+        public boolean matches(OverlayVariableReplacer replacer, Path oldName) {
             String replacedValue = replacer.replace(oldName, value);
             return replacedValue.matches(matches);
         }
@@ -231,7 +266,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        protected String generate(String oldName) {
+        protected String generate(Path oldName) {
             return this.staticPart;
         }
     }
@@ -246,7 +281,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        protected String generate(String oldName) {
+        protected String generate(Path oldName) {
             return format.format(counter++);
         }
 
@@ -266,7 +301,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        protected String generate(String oldName) {
+        protected String generate(Path oldName) {
             return getReplacer().replace(oldName, rawString);
         }
     }
@@ -290,8 +325,6 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             log.error(e.getMessage());
             log.error(e);
         }
-        this.property = initializeProcessProperty(step.getProzess());
-        this.renamingLog = deserializeRenamingLogFromJson(this.property.getWert());
     }
 
     private VariableReplacer getVariableReplacer() throws PluginException {
@@ -372,27 +405,29 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         property = new Processproperty();
         property.setProcessId(process.getId());
         property.setTitel(PROPERTY_TITLE);
+
         return property;
     }
 
+    private void updateProcessPropertyWithNewFileNameHistory() {
+        property.setWert(serializeOriginalFileNameHistoryIntoJson(originalFileNameHistory));
+    }
+
     private void saveProcessProperty() {
-        property.setWert(serializeRenamingLogIntoJson(renamingLog));
         PropertyManager.saveProcessProperty(property);
     }
 
-    private Map<String, Map<String, String>> deserializeRenamingLogFromJson(String json) {
-        Type renamingLogType = new TypeToken<Map<String, Map<String, String>>>() {
-        }.getType();
-        Map<String, Map<String, String>> renamingLog = gson.fromJson(property.getWert(), renamingLogType);
+    private OriginalFileNameHistory deserializeOriginalFileNameHistoryFromJson(String json) {
+        OriginalFileNameHistory originalFileNameHistory = gson.fromJson(json, OriginalFileNameHistory.class);
         // Initialize empty, if deserialization was not successful
-        if (renamingLog == null) {
-            renamingLog = new HashMap<>();
+        if (originalFileNameHistory == null) {
+            originalFileNameHistory = new OriginalFileNameHistory();
         }
-        return renamingLog;
+        return originalFileNameHistory;
     }
 
-    private String serializeRenamingLogIntoJson(Map<String, Map<String, String>> renamingLog) {
-        return gson.toJson(renamingLog);
+    private String serializeOriginalFileNameHistoryIntoJson(OriginalFileNameHistory originalFileNameHistory) {
+        return gson.toJson(originalFileNameHistory);
     }
 
     // ###################################################################################
@@ -402,13 +437,16 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     @Override
     public PluginReturnValue run() {
         try {
+            property = initializeProcessProperty(step.getProzess());
+            originalFileNameHistory = deserializeOriginalFileNameHistoryFromJson(this.property.getWert());
             List<Path> foldersToRename = determineFoldersToRename();
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
             performRenaming(renamingMapping);
             if (updateMetsFile) {
                 metsFileUpdater.updateMetsFile(null, null);
             }
-            System.out.println(metsFileUpdater);
+            //            updateProcessPropertyWithNewFileNameHistory();
+            //            saveProcessProperty();
         } catch (IOException | PluginException | SwapException | DAOException e) {
             log.error(e.getMessage());
             log.error(e);
@@ -480,8 +518,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             String oldFullFileName = file.getFileName().toString();
             int extensionIndex = oldFullFileName.lastIndexOf(".");
             String fileExtension = oldFullFileName.substring(extensionIndex + 1);
-            String oldFileName = oldFullFileName.substring(0, extensionIndex);
-            String newFullFileName = renamingFormatter.generateNewName(oldFileName) + "." + fileExtension;
+            String newFullFileName = renamingFormatter.generateNewName(file) + "." + fileExtension;
 
             if (!oldFullFileName.equals(newFullFileName)) {
                 result.put(Paths.get(folder.toString(), oldFullFileName), Paths.get(folder.toString(), newFullFileName));
