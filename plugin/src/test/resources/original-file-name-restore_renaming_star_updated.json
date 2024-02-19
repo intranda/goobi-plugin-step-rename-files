@@ -1,0 +1,19 @@
+{
+	"originalFileNameMapping":{
+		"images_media":{
+			"a_01.jpg":"a_01.jpg",
+			"a_02.jpg":"a_02.jpg",
+			"a_03.jpg":"a_03.jpg"
+		},
+		"images_tif":{
+			"b_TIF_01.tif":"b_TIF_01.tif",
+			"b_TIF_02.tif":"b_TIF_02.tif",
+			"b_TIF_03.tif":"b_TIF_03.tif"
+		},
+		"images_xml":{
+			"c_01.xml":"c_01.xml",
+			"c_02.xml":"c_02.xml",
+			"c_03.xml":"c_03.xml"
+		}
+	}
+}

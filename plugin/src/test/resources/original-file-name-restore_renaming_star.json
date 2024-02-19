@@ -1,0 +1,19 @@
+{
+	"originalFileNameMapping":{
+		"images_media":{
+			"TestProcess_123_00004.jpg":"a_01.jpg",
+			"TestProcess_123_00005.jpg":"a_02.jpg",
+			"TestProcess_123_00006.jpg":"a_03.jpg"
+		},
+		"images_tif":{
+			"TestProcess_123_00004.tif":"b_TIF_01.tif",
+			"TestProcess_123_00005.tif":"b_TIF_02.tif",
+			"TestProcess_123_00006.tif":"b_TIF_03.tif"
+		},
+		"images_xml":{
+			"TestProcess_123_00004.xml":"c_01.xml",
+			"TestProcess_123_00005.xml":"c_02.xml",
+			"TestProcess_123_00006.xml":"c_03.xml"
+		}
+	}
+}

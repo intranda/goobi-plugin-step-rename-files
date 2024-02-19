@@ -213,14 +213,19 @@ public class RenameFilesPluginTest {
     }
 
     private void verifyOriginalFileNameHistoryUpdatedCorrectly(String jsonFile) throws IOException, URISyntaxException {
-        URL resource = getClass().getResource("/" + jsonFile + ".json");
-        String json = Files.readString(Path.of(resource.toURI()));
+        String json = loadJsonResource(jsonFile);
         OriginalFileNameHistory expectedHistory = gson.fromJson(json, OriginalFileNameHistory.class);
         assertThat(expectedHistory, Is.is(plugin.originalFileNameHistory));
         //        verify(processProperty, times(1)).setWert(json);
         //        doNothing().when(PropertyManager.class);
         //        PropertyManager.saveProcessProperty(processProperty);
         // TODO: Currently not tested, that saving the property is invoked!
+    }
+
+    private String loadJsonResource(String jsonFile) throws IOException, URISyntaxException {
+        URL resource = getClass().getResource("/" + jsonFile + ".json");
+        String json = Files.readString(Path.of(resource.toURI()));
+        return json;
     }
 
     private void mockDefaultRenamingFoldersExist(boolean doExist) {
@@ -705,5 +710,79 @@ public class RenameFilesPluginTest {
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
         verifyOriginalFileNameHistoryUpdatedCorrectly("mixed-variable-static-counter-with-startValue_renaming_star");
+    }
+
+    @Test
+    public void onlyRestoredOriginalFileName_renameMultipleFolders_expectCorrectFileRenaming()
+            throws ConfigurationException, IOException, URISyntaxException {
+        setupPluginConfiguration("original-file-name-restore_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "TestProcess_123_00004.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "TestProcess_123_00005.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "TestProcess_123_00006.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "TestProcess_123_00004.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "TestProcess_123_00005.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "TestProcess_123_00006.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "TestProcess_123_00004.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "TestProcess_123_00005.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "TestProcess_123_00006.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        when(processProperty.getWert()).thenReturn(loadJsonResource("original-file-name-restore_renaming_star"));
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verifyRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void onlyRestoredOriginalFileName_renameMultipleFolders_expectOriginalFileNameHistoryUpdatedCorrectly()
+            throws ConfigurationException, IOException, URISyntaxException {
+        setupPluginConfiguration("original-file-name-restore_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "TestProcess_123_00004.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "TestProcess_123_00005.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "TestProcess_123_00006.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "TestProcess_123_00004.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "TestProcess_123_00005.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "TestProcess_123_00006.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "TestProcess_123_00004.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "TestProcess_123_00005.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "TestProcess_123_00006.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        when(processProperty.getWert()).thenReturn(loadJsonResource("original-file-name-restore_renaming_star"));
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verifyOriginalFileNameHistoryUpdatedCorrectly("original-file-name-restore_renaming_star_updated");
     }
 }
