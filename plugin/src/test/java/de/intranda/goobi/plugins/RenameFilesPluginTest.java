@@ -649,13 +649,17 @@ public class RenameFilesPluginTest {
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0001.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0002.xml"),
                 Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "FILE_0003.xml"));
+        Map<Path, Path> renamingMap = new HashMap<>();
+        for (int i = 0; i < oldFiles.size(); i++) {
+            renamingMap.put(oldFiles.get(i), newFiles.get(i));
+        }
 
         mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        verify(metsFileUpdater, times(1)).updateMetsFile(null, null);
+        verify(metsFileUpdater, times(1)).updateMetsFile(process, renamingMap);
     }
 
     @Test

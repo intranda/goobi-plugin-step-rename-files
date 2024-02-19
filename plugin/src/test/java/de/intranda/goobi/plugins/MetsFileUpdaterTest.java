@@ -95,14 +95,6 @@ public class MetsFileUpdaterTest {
     }
 
     @Test
-    public void noRenamingDone_expectNoModificationToMetsFile() {
-        Map<String, String> renamingMap = Map.of(
-                "00000001.jpg", "FILE_0001.jpg",
-                "00000002.jpg", "FILE_0002.jpg",
-                "00000003.jpg", "FILE_0003.jpg");
-    }
-
-    @Test
     public void simpleRenamingDone_expectCorrectModificationsToMetsFile()
             throws IOException, ReadException, PreferencesException, SwapException, WriteException {
         NumberFormat oldFormat = new DecimalFormat("00000000");
