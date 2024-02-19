@@ -176,6 +176,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             OriginalFileNameHistory other = (OriginalFileNameHistory) o;
             return other.perFolderCurrentToOriginalFileNameMapping.equals(perFolderCurrentToOriginalFileNameMapping);
         }
+
+        @Override
+        public String toString() {
+            return perFolderCurrentToOriginalFileNameMapping.toString();
+        }
     }
 
     // ###################################################################################

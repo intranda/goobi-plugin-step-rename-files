@@ -2,6 +2,7 @@ package de.intranda.goobi.plugins;
 
 import static org.easymock.EasyMock.expect;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -31,6 +32,7 @@ import org.goobi.beans.Project;
 import org.goobi.beans.Ruleset;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.PluginReturnValue;
+import org.hamcrest.core.Is;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -214,7 +216,7 @@ public class RenameFilesPluginTest {
         URL resource = getClass().getResource("/" + jsonFile + ".json");
         String json = Files.readString(Path.of(resource.toURI()));
         OriginalFileNameHistory expectedHistory = gson.fromJson(json, OriginalFileNameHistory.class);
-        assertEquals(expectedHistory, plugin.originalFileNameHistory);
+        assertThat(expectedHistory, Is.is(plugin.originalFileNameHistory));
         //        verify(processProperty, times(1)).setWert(json);
         //        doNothing().when(PropertyManager.class);
         //        PropertyManager.saveProcessProperty(processProperty);
@@ -668,5 +670,40 @@ public class RenameFilesPluginTest {
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
         verifyOriginalFileNameHistoryUpdatedCorrectly("counter-only_renaming_star");
+    }
+
+    @Test
+    public void mixedVariableCounterStaticWithStartValue_renameMultipleFolders_expectOriginalFileNameHistoryUpdatedCorrectly()
+            throws ConfigurationException, IOException, URISyntaxException {
+        setupPluginConfiguration("mixed-variable-static-counter-with-startValue_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00004.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00005.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00006.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00004.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00005.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00006.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00004.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00005.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, DEFAULT_PROCESS_TITLE + "_00006.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verifyOriginalFileNameHistoryUpdatedCorrectly("mixed-variable-static-counter-with-startValue_renaming_star");
     }
 }
