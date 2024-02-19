@@ -19,7 +19,6 @@ public class MetsFileUpdater {
     private static MetsFileUpdater instance;
 
     public static synchronized MetsFileUpdater getInstance() {
-        System.err.println("REAL GET_INSTANCE");
         if (instance == null) {
             instance = new MetsFileUpdater();
         }
