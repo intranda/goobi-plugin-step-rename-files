@@ -1,8 +1,10 @@
 package de.intranda.goobi.plugins;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.goobi.beans.Process;
 
@@ -25,14 +27,7 @@ public class MetsFileUpdater {
         return instance;
     }
 
-    /**
-     * update information of ContentFiles' locations in the METS file
-     * 
-     * @param process Process
-     * @param namesMap Map from old names to new names
-     * @return true if the METS file is updated successfully, false if any error should occur
-     */
-    public void updateMetsFile(Process process, Map<String, String> namesMap) throws IOException {
+    public void updateMetsFile(Process process, Map<Path, Path> renamingMapping) throws IOException {
         try {
             Fileformat fileformat = process.readMetadataFile();
             DigitalDocument dd = fileformat.getDigitalDocument();
@@ -40,12 +35,7 @@ public class MetsFileUpdater {
             List<ContentFile> filesList = fileSet.getAllFiles();
             for (ContentFile file : filesList) {
                 String oldLocation = file.getLocation();
-                int fileNameStartIndex = oldLocation.lastIndexOf("/") + 1;
-                String locationPrefix = oldLocation.substring(0, fileNameStartIndex);
-
-                String oldFileName = oldLocation.substring(fileNameStartIndex);
-                String newFileName = getNewFileName(oldFileName, namesMap);
-                String newLocation = locationPrefix.concat(newFileName);
+                String newLocation = lookUpNewLocation(renamingMapping, oldLocation);
                 file.setLocation(newLocation);
             }
 
@@ -56,21 +46,31 @@ public class MetsFileUpdater {
         }
     }
 
-    /**
-     * get the new file name given the old one
-     * 
-     * @param oldFileName the old file name, including the file suffix
-     * @param namesMap Map from old names to new names
-     * @return the new file name including the file suffix
-     */
-    private String getNewFileName(String oldFileName, Map<String, String> namesMap) {
-        int suffixIndex = oldFileName.lastIndexOf(".");
-        String suffix = oldFileName.substring(suffixIndex);
-        String oldName = oldFileName.substring(0, suffixIndex);
-        if (namesMap.containsKey(oldName)) {
-            return namesMap.get(oldName).concat(suffix);
-        } else {
-            return oldFileName;
+    private String lookUpNewLocation(Map<Path, Path> namesMap, String oldLocation) {
+        List<String> newLocations = namesMap.entrySet()
+                .stream()
+                .filter(e -> renamingDoesMatchToOldLocation(e, oldLocation))
+                .map(e -> applyRenamingToOldLocation(e, oldLocation))
+                .collect(Collectors.toList());
+        if (newLocations.size() != 1) {
+            throw new IllegalArgumentException("Number of results for the change of file location \"" + oldLocation
+                    + "\" is not unique! Number of found results: " + newLocations.size());
         }
+        return newLocations.get(0);
+    }
+
+    private boolean renamingDoesMatchToOldLocation(Map.Entry<Path, Path> renamingEntry, String oldLocation) {
+        String[] from = renamingEntry.getKey().toString().split("/");
+        String[] old = oldLocation.split("/");
+        return from[from.length - 1].equals(old[old.length - 1])
+                && old[old.length - 2].endsWith(from[from.length - 2])
+                && from[from.length - 3].equals(old[old.length - 3]);
+    }
+
+    private String applyRenamingToOldLocation(Map.Entry<Path, Path> renamingEntry, String oldLocation) {
+        String[] to = renamingEntry.getValue().toString().split("/");
+        String[] old = oldLocation.split("/");
+        old[old.length - 1] = to[to.length - 1];
+        return String.join("/", old);
     }
 }

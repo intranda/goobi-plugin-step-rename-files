@@ -10,6 +10,11 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,6 +34,8 @@ import ugh.exceptions.WriteException;
 import ugh.fileformats.mets.MetsMods;
 
 public class MetsFileUpdaterTest {
+    private static final String DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY = "/opt/digiverso/goobi/metadata/1/images/media";
+
     private MetsFileUpdater metsFileUpdater;
 
     private Process process;
@@ -64,7 +71,7 @@ public class MetsFileUpdaterTest {
     }
 
     private void verifyMetadataFileLocationUpdateCorrect(List<String> originalFileLocations, List<String> updatedFileLocations,
-            Map<String, String> renamingMap) throws WriteException, PreferencesException, IOException, SwapException {
+            Map<Path, Path> renamingMap) throws WriteException, PreferencesException, IOException, SwapException {
         verify(process, times(1)).writeMetadataFile(fileFormat);
 
         assertEquals(originalFileLocations.size(), updatedFileLocations.size());
@@ -75,11 +82,11 @@ public class MetsFileUpdaterTest {
         }
     }
 
-    private String applyRenaming(String originalFileLocation, Map<String, String> renamingMap) {
+    private String applyRenaming(String originalFileLocation, Map<Path, Path> renamingMap) {
         String[] pathElements = originalFileLocation.split("/");
-        for (Map.Entry<String, String> e : renamingMap.entrySet()) {
-            if (pathElements[pathElements.length - 1].equals(e.getKey())) {
-                pathElements[pathElements.length - 1] = e.getValue();
+        for (Map.Entry<Path, Path> e : renamingMap.entrySet()) {
+            if (pathElements[pathElements.length - 1].equals(e.getKey().getFileName().toString())) {
+                pathElements[pathElements.length - 1] = e.getValue().getFileName().toString();
                 return String.join("/", pathElements);
             }
         }
@@ -98,16 +105,22 @@ public class MetsFileUpdaterTest {
     @Test
     public void simpleRenamingDone_expectCorrectModificationsToMetsFile()
             throws IOException, ReadException, PreferencesException, SwapException, WriteException {
-        Map<String, String> renamingMap = Map.of(
-                "00000001.jpg", "FILE_0001.jpg",
-                "00000002.jpg", "FILE_0002.jpg",
-                "00000003.jpg", "FILE_0003.jpg");
+        NumberFormat oldFormat = new DecimalFormat("00000000");
+        NumberFormat newFormat = new DecimalFormat("0000");
+
+        Map<Path, Path> renamingMap = new HashMap<>();
+        // Test file is a real example and contains 56 files
+        for (int i = 1; i <= 56; i++) {
+            renamingMap.put(
+                    Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, oldFormat.format(i) + ".jpg"),
+                    Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "FILE_" + newFormat.format(i) + ".jpg"));
+        }
 
         mockMetaFileReading(process, "before-mets-update.xml");
         List<String> originalFileLocations = extractFileLocations();
         metsFileUpdater.updateMetsFile(process, renamingMap);
         List<String> updatedFileLocations = extractFileLocations();
 
-        verifyMetadataFileLocationUpdateCorrect(originalFileLocations, originalFileLocations, renamingMap);
+        verifyMetadataFileLocationUpdateCorrect(originalFileLocations, updatedFileLocations, renamingMap);
     }
 }

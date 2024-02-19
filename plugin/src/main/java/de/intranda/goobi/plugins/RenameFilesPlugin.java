@@ -480,7 +480,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
             performRenaming(renamingMapping);
             if (updateMetsFile) {
-                metsFileUpdater.updateMetsFile(null, null);
+                metsFileUpdater.updateMetsFile(process, renamingMapping);
             }
             updateProcessPropertyWithNewFileNameHistory();
             saveProcessProperty();
