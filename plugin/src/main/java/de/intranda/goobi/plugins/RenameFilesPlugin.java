@@ -5,7 +5,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -25,6 +24,7 @@ import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
 
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.config.ConfigurationHelper;
@@ -48,7 +48,7 @@ import ugh.exceptions.ReadException;
 public class RenameFilesPlugin implements IStepPluginVersion2 {
     private static final long serialVersionUID = -5097830334502599546L;
 
-    private static final String PROPERTY_TITLE = "plugin_intranda_step_rename_files";
+    public static final String PROPERTY_TITLE = "plugin_intranda_step_rename_files";
     private static final String NAME_PART_TYPE_STATIC = "static";
     private static final String NAME_PART_TYPE_COUNTER = "counter";
     private static final String NAME_PART_TYPE_VARIABLE = "variable";
@@ -77,7 +77,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private RenamingFormatter renamingFormatter;
 
     private boolean updateMetsFile;
-    private OriginalFileNameHistory originalFileNameHistory;
+    // Must be visible in test to compare correct update
+    OriginalFileNameHistory originalFileNameHistory;
 
     // ###################################################################################
     // # Required plugin methods
@@ -118,16 +119,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     // ###################################################################################
 
     class OriginalFileNameHistory {
+        @SerializedName("originalFileNameMapping")
         private Map<String, Map<String, String>> perFolderCurrentToOriginalFileNameMapping = new HashMap<>();
-
-        private String extractFolderIdentifier(Path path) {
-            return path.getParent().getFileName().toString() + "_"
-                    + path.getFileName().toString().substring(path.getFileName().toString().lastIndexOf("_") + 1);
-        }
-
-        private String extractFileName(Path path) {
-            return path.getFileName().toString();
-        }
 
         public String getOriginalFileNameOf(Path currentFilePath) {
             Map<String, String> folderMapping = getOriginalFileNameMappingOfFolder(extractFolderIdentifier(currentFilePath));
@@ -138,11 +131,50 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             return folderMapping.get(currentFileName);
         }
 
+        public void updateFileName(Path from, Path to) {
+            String fromFolder = extractFolderIdentifier(from);
+            String toFolder = extractFolderIdentifier(to);
+            if (!fromFolder.equals(toFolder)) {
+                throw new IllegalArgumentException("Moving files between folders (" + fromFolder + " -> " + toFolder + ") not permitted!");
+            }
+            Map<String, String> folderMapping = getOriginalFileNameMappingOfFolder(fromFolder);
+            String fromFile = extractFileName(from);
+            String toFile = extractFileName(to);
+            String originalFileName = fromFile;
+            if (folderMapping.containsKey(fromFile)) {
+                originalFileName = folderMapping.get(fromFile);
+                folderMapping.remove(fromFile);
+            }
+            folderMapping.put(toFile, originalFileName);
+        }
+
+        private String extractFolderIdentifier(Path path) {
+            // If path is pointing to a file, use the parent directory for folder identifier calculation
+            if (path.getFileName().toString().contains(".")) {
+                path = path.getParent();
+            }
+            return path.getParent().getFileName().toString() + "_"
+                    + path.getFileName().toString().substring(path.getFileName().toString().lastIndexOf("_") + 1);
+        }
+
+        private String extractFileName(Path path) {
+            return path.getFileName().toString();
+        }
+
         private Map<String, String> getOriginalFileNameMappingOfFolder(String folderIdentifier) {
             if (!perFolderCurrentToOriginalFileNameMapping.containsKey(folderIdentifier)) {
-                return Collections.emptyMap();
+                perFolderCurrentToOriginalFileNameMapping.put(folderIdentifier, new HashMap<>());
             }
             return perFolderCurrentToOriginalFileNameMapping.get(folderIdentifier);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || !(o instanceof OriginalFileNameHistory)) {
+                return false;
+            }
+            OriginalFileNameHistory other = (OriginalFileNameHistory) o;
+            return other.perFolderCurrentToOriginalFileNameMapping.equals(perFolderCurrentToOriginalFileNameMapping);
         }
     }
 
@@ -445,8 +477,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             if (updateMetsFile) {
                 metsFileUpdater.updateMetsFile(null, null);
             }
-            //            updateProcessPropertyWithNewFileNameHistory();
-            //            saveProcessProperty();
+            updateProcessPropertyWithNewFileNameHistory();
+            saveProcessProperty();
         } catch (IOException | PluginException | SwapException | DAOException e) {
             log.error(e.getMessage());
             log.error(e);
@@ -532,6 +564,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         try {
             for (Map.Entry<Path, Path> e : renamingMap.entrySet()) {
                 StorageProvider.getInstance().move(e.getKey(), e.getValue());
+                originalFileNameHistory.updateFileName(e.getKey(), e.getValue());
             }
         } catch (IOException e) {
             log.error("Error during renaming. The renamed files might be inconsistent");

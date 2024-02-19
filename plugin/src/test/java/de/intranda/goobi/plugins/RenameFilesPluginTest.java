@@ -10,6 +10,9 @@ import static org.powermock.api.easymock.PowerMock.mockStatic;
 import static org.powermock.api.easymock.PowerMock.replay;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
@@ -21,6 +24,7 @@ import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.apache.commons.configuration.XMLConfiguration;
 import org.apache.commons.configuration.tree.xpath.XPathExpressionEngine;
+import org.easymock.EasyMock;
 import org.goobi.beans.Process;
 import org.goobi.beans.Processproperty;
 import org.goobi.beans.Project;
@@ -35,6 +39,9 @@ import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import com.google.gson.Gson;
+
+import de.intranda.goobi.plugins.RenameFilesPlugin.OriginalFileNameHistory;
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.config.ConfigurationHelper;
 import de.sub.goobi.helper.StorageProvider;
@@ -73,6 +80,7 @@ public class RenameFilesPluginTest {
     private Ruleset ruleset;
     private Prefs rulesetPreferences;
     private Step step;
+    private Gson gson;
 
     private RenameFilesPlugin plugin;
 
@@ -102,6 +110,7 @@ public class RenameFilesPluginTest {
 
         processProperty = mock(Processproperty.class);
         setupProcessPropertyMocking(processProperty);
+        when(processProperty.getTitel()).thenReturn(RenameFilesPlugin.PROPERTY_TITLE);
 
         storage = mock(StorageProviderInterface.class);
         setupStorageProviderMocking(storage);
@@ -113,6 +122,8 @@ public class RenameFilesPluginTest {
 
         metsFileUpdater = mock(MetsFileUpdater.class);
         setupMetsFileUpdaterMocking(metsFileUpdater);
+
+        gson = new Gson();
     }
 
     private void setupConfigurationFileMocking(SubnodeConfiguration config) {
@@ -128,6 +139,7 @@ public class RenameFilesPluginTest {
         expect(PropertyManager.getProcessPropertiesForProcess(DEFAULT_PROCESS_ID))
                 .andReturn(List.of(processProperty))
                 .anyTimes();
+        PropertyManager.saveProcessProperty(EasyMock.anyObject());
         replay(PropertyManager.class);
     }
 
@@ -189,13 +201,24 @@ public class RenameFilesPluginTest {
         pluginConfiguration = loadPluginConfiguration(configurationName);
     }
 
-    private void expectRenamingFromTo(List<Path> from, List<Path> to) throws IOException {
+    private void verifyRenamingFromTo(List<Path> from, List<Path> to) throws IOException {
         if (from.size() != to.size()) {
             Assert.fail("\"from\" and \"to\" need to be the same size!");
         }
         for (int i = 0; i < from.size(); i++) {
             verify(storage, times(1)).move(from.get(i), to.get(i));
         }
+    }
+
+    private void verifyOriginalFileNameHistoryUpdatedCorrectly(String jsonFile) throws IOException, URISyntaxException {
+        URL resource = getClass().getResource("/" + jsonFile + ".json");
+        String json = Files.readString(Path.of(resource.toURI()));
+        OriginalFileNameHistory expectedHistory = gson.fromJson(json, OriginalFileNameHistory.class);
+        assertEquals(expectedHistory, plugin.originalFileNameHistory);
+        //        verify(processProperty, times(1)).setWert(json);
+        //        doNothing().when(PropertyManager.class);
+        //        PropertyManager.saveProcessProperty(processProperty);
+        // TODO: Currently not tested, that saving the property is invoked!
     }
 
     private void mockDefaultRenamingFoldersExist(boolean doExist) {
@@ -265,7 +288,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -287,7 +310,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -322,7 +345,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -357,7 +380,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -379,7 +402,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -414,7 +437,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -449,7 +472,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -485,7 +508,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -520,7 +543,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -555,7 +578,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -590,7 +613,7 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
-        expectRenamingFromTo(oldFiles, newFiles);
+        verifyRenamingFromTo(oldFiles, newFiles);
     }
 
     @Test
@@ -626,5 +649,24 @@ public class RenameFilesPluginTest {
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
         verify(metsFileUpdater, times(1)).updateMetsFile(null, null);
+    }
+
+    @Test
+    public void onlySingleCounter_renameOneFolderOnly_expectOriginalFileNameHistoryUpdatedCorrectly()
+            throws ConfigurationException, IOException, URISyntaxException {
+        setupPluginConfiguration("counter-only_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verifyOriginalFileNameHistoryUpdatedCorrectly("counter-only_renaming_star");
     }
 }
