@@ -183,22 +183,6 @@ public class RenameFilesPluginTest {
         return xmlConfig.configurationAt("//config");
     }
 
-    //    private void setupDefaultPluginConfiguration() {
-    //        HierarchicalConfiguration rootConfiguration = new HierarchicalConfiguration();
-    //        ConfigurationNode configRoot = new DefaultConfigurationNode("config");
-    //        ConfigurationNode folder = new DefaultConfigurationNode("folder", "*");
-    //        configRoot.addChild(folder);
-    //        pluginConfiguration = new SubnodeConfiguration(rootConfiguration, configRoot);
-    //    }
-    //
-    //    private void setupPluginConfigurationWithNonExistingFolder() {
-    //        HierarchicalConfiguration rootConfiguration = new HierarchicalConfiguration();
-    //        ConfigurationNode configRoot = new DefaultConfigurationNode("config");
-    //        ConfigurationNode folder = new DefaultConfigurationNode("folder", "non-existent");
-    //        configRoot.addChild(folder);
-    //        pluginConfiguration = new SubnodeConfiguration(rootConfiguration, configRoot);
-    //    }
-
     private void setupPluginConfiguration(String configurationName) throws ConfigurationException {
         pluginConfiguration = loadPluginConfiguration(configurationName);
     }
@@ -216,9 +200,6 @@ public class RenameFilesPluginTest {
         String json = loadJsonResource(jsonFile);
         OriginalFileNameHistory expectedHistory = gson.fromJson(json, OriginalFileNameHistory.class);
         assertThat(expectedHistory, Is.is(plugin.originalFileNameHistory));
-        //        verify(processProperty, times(1)).setWert(json);
-        //        doNothing().when(PropertyManager.class);
-        //        PropertyManager.saveProcessProperty(processProperty);
         // TODO: Currently not tested, that saving the property is invoked!
     }
 
