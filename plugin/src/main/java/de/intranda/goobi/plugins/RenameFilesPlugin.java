@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -549,6 +550,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         Map<Path, Path> result = new TreeMap<>();
 
         List<Path> filesToRename = StorageProvider.getInstance().listFiles(folder.toString());
+        Collections.sort(filesToRename);
         renamingFormatter.reset();
 
         for (Path file : filesToRename) {
