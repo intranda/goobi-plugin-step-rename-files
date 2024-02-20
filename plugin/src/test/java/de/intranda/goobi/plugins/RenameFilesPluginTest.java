@@ -790,37 +790,25 @@ public class RenameFilesPluginTest {
         initializate();
 
         List<Path> oldFiles = List.of(
-                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00005.jpg"),
-                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00004.jpg"),
-                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"),
-                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"),
-                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00001.jpg"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00005.tif"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00004.tif"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00003.tif"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00002.tif"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00001.tif"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00005.xml"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00004.xml"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00003.xml"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00002.xml"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00001.xml"));
-        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00009.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00008.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00007.jpg"),
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00006.jpg"),
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00005.jpg"),
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00004.jpg"),
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"),
                 Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00006.tif"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00005.tif"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00004.tif"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00003.tif"),
-                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00002.tif"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00006.xml"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00005.xml"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00004.xml"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00003.xml"),
-                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00002.xml"));
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00001.jpg"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00010.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00009.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00008.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00007.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00006.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00005.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00004.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"));
 
         mockStorageFileParentPathPresence(oldFiles);
         mockStorageFilePresence(oldFiles);
@@ -828,5 +816,38 @@ public class RenameFilesPluginTest {
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
         verifyOrderedRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void onlyStaticFileName_renameMultipleFoldersWithMultipleFiles_expectNamingCollisionDetectedAndErrorReturn()
+            throws ConfigurationException, IOException, URISyntaxException {
+        setupPluginConfiguration("static-only_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_02.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_03.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_01.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_02.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "b_TIF_03.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_01.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_02.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "c_03.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "STATIC.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "STATIC.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "STATIC.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "STATIC.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "STATIC.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "STATIC.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "STATIC.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "STATIC.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "STATIC.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.ERROR, plugin.run());
     }
 }

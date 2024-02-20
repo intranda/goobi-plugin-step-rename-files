@@ -10,6 +10,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -479,7 +481,17 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             originalFileNameHistory = deserializeOriginalFileNameHistoryFromJson(this.property.getWert());
             List<Path> foldersToRename = determineFoldersToRename();
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
-            performRenaming(renamingMapping);
+            if (renamingMapping.isEmpty()) {
+                log.info("Nothing to rename.");
+                return PluginReturnValue.FINISH;
+            }
+            // Find an order of renamings that is conflict free (i. e. does not rename a file to a name that is already present due to ordering issues)
+            List<Path> orderedRenamingOrigins = findConflictFreeRenamingOrder(renamingMapping);
+            if (!canRenamingWithoutConflicts(renamingMapping, orderedRenamingOrigins)) {
+                log.error("Cannot perform renaming without conflicts. Aborting...");
+                return PluginReturnValue.ERROR;
+            }
+            performRenaming(renamingMapping, orderedRenamingOrigins);
             if (updateMetsFile) {
                 metsFileUpdater.updateMetsFile(process, renamingMapping);
             }
@@ -567,11 +579,59 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return result;
     }
 
-    private void performRenaming(Map<Path, Path> renamingMap) throws IOException {
+    private List<Path> findConflictFreeRenamingOrder(Map<Path, Path> renamingMapping) {
+        Map<Path, Path> temporaryMapping = new HashMap<>(renamingMapping);
+        List<Path> orderedFileRenamingSources = new LinkedList<>();
+        while (!temporaryMapping.isEmpty()) {
+            Optional<Path> conflictFreeRenamingSource = findConflictFreeRenamingSource(temporaryMapping);
+            if (conflictFreeRenamingSource.isPresent()) {
+                orderedFileRenamingSources.add(conflictFreeRenamingSource.get());
+                temporaryMapping.remove(conflictFreeRenamingSource.get());
+            }
+        }
+        return orderedFileRenamingSources;
+    }
+
+    private Optional<Path> findConflictFreeRenamingSource(Map<Path, Path> temporaryMapping) {
+        for (Map.Entry<Path, Path> e : temporaryMapping.entrySet()) {
+            if (isConflictFree(temporaryMapping, e)) {
+                return Optional.of(e.getKey());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private boolean isConflictFree(Map<Path, Path> mapping, Entry<Path, Path> itemToCheck) {
+        for (Map.Entry<Path, Path> e : mapping.entrySet()) {
+            if (itemToCheck.getValue().equals(e.getKey())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean canRenamingWithoutConflicts(Map<Path, Path> renamingMapping, List<Path> orderedRenamingOrigins) {
+        // Only rename a file once
+        if (renamingMapping.keySet().stream().distinct().count() != renamingMapping.size()) {
+            return false;
+        }
+        // Only rename to any file once
+        if (renamingMapping.values().stream().distinct().count() != renamingMapping.size()) {
+            return false;
+        }
+        // Rename all files
+        if (renamingMapping.size() != orderedRenamingOrigins.size()) {
+            return false;
+        }
+        return true;
+    }
+
+    private void performRenaming(Map<Path, Path> renamingMap, List<Path> orderedRenamingOrigins) throws IOException {
         try {
-            for (Map.Entry<Path, Path> e : renamingMap.entrySet()) {
-                StorageProvider.getInstance().move(e.getKey(), e.getValue());
-                originalFileNameHistory.updateFileName(e.getKey(), e.getValue());
+            for (Path from : orderedRenamingOrigins) {
+                Path to = renamingMap.get(from);
+                StorageProvider.getInstance().move(from, to);
+                originalFileNameHistory.updateFileName(from, to);
             }
         } catch (IOException e) {
             log.error("Error during renaming. The renamed files might be inconsistent");
