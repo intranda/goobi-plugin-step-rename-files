@@ -37,6 +37,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -193,6 +195,16 @@ public class RenameFilesPluginTest {
         }
         for (int i = 0; i < from.size(); i++) {
             verify(storage, times(1)).move(from.get(i), to.get(i));
+        }
+    }
+
+    private void verifyOrderedRenamingFromTo(List<Path> from, List<Path> to) throws IOException {
+        if (from.size() != to.size()) {
+            Assert.fail("\"from\" and \"to\" need to be the same size!");
+        }
+        InOrder inOrder = Mockito.inOrder(storage);
+        for (int i = 0; i < from.size(); i++) {
+            inOrder.verify(storage, times(1)).move(from.get(i), to.get(i));
         }
     }
 
@@ -769,5 +781,52 @@ public class RenameFilesPluginTest {
         assertEquals(PluginReturnValue.FINISH, plugin.run());
 
         verifyOriginalFileNameHistoryUpdatedCorrectly("original-file-name-restore_renaming_star_updated");
+    }
+
+    @Test
+    public void onlyCounterFileNameShifted_renameMultipleFolders_expectCorrectFileRenamingOrder()
+            throws ConfigurationException, IOException, URISyntaxException {
+        setupPluginConfiguration("counter-only-shifted_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00005.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00004.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00001.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00005.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00004.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00003.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00002.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00001.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00005.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00004.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00003.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00002.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00001.xml"));
+        List<Path> newFiles = List.of(
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00006.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00005.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00004.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00003.jpg"),
+                Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00002.jpg"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00006.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00005.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00004.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00003.tif"),
+                Paths.get(DEFAULT_PROCESS_TIF_DIRECTORY, "00002.tif"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00006.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00005.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00004.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00003.xml"),
+                Paths.get(DEFAULT_PROCESS_OCR_XML_DIRECTORY, "00002.xml"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verifyOrderedRenamingFromTo(oldFiles, newFiles);
     }
 }
