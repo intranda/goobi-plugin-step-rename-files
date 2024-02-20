@@ -35,6 +35,7 @@ import org.goobi.production.enums.PluginReturnValue;
 import org.hamcrest.core.Is;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InOrder;
@@ -87,6 +88,12 @@ public class RenameFilesPluginTest {
     private Gson gson;
 
     private RenameFilesPlugin plugin;
+
+    @BeforeClass
+    public static void setUpClass() throws Exception {
+        URL log4JResource = RenameFilesPlugin.class.getResource("/log4j2.xml");
+        System.setProperty("log4j.configurationFile", log4JResource.toString());
+    }
 
     @Before
     public void setup() throws IOException, SwapException, DAOException {
