@@ -1,0 +1,10 @@
+<config_plugin>
+    <config>
+        <folder>*</folder>
+        <namepart type="static">FILE_</namepart>
+        <namepart type="counter">0000</namepart>
+        <metsFile>
+            <update>true</update>
+        </metsFile>
+    </config>
+</config_plugin>

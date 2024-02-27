@@ -1,0 +1,7 @@
+<config_plugin>
+    <config>
+        <folder>*</folder>
+        <startValue>2</startValue>
+        <namepart type="counter">00000</namepart>
+    </config>
+</config_plugin>

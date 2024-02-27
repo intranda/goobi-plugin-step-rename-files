@@ -1,0 +1,20 @@
+<config_plugin>
+    <config>
+        <folder>*</folder>
+        <namepart type="variable">
+            {processtitle}
+            <replace regex="^.*?_" replacement=""/>
+            <condition value="{meta._imageFilePrefix}" matches="^$"/>
+        </namepart>
+        <namepart type="variable">
+            {meta._imageFilePrefix}
+            <condition value="{meta._imageFilePrefix}" matches=".+"/>
+        </namepart>
+        <namepart type="static">_</namepart>
+        <namepart type="counter">0000</namepart>
+        <metsFile>
+            <update>true</update>
+        </metsFile>
+    </config>
+</config_plugin>
+                

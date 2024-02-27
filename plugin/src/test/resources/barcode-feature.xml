@@ -1,0 +1,15 @@
+<config_plugin>
+    <config>
+        <folder>*</folder>
+        <namepart type="static">FILE_</namepart>
+        <namepart type="counter">
+            0000
+            <condition value="{originalfilename}" matches="^(?!.*barcode).*$" />
+        </namepart>
+        <namepart type="static">
+            0000
+            <condition value="{originalfilename}" matches="^.*barcode.*$" />
+        </namepart>
+    </config>
+</config_plugin>
+                

@@ -1,0 +1,6 @@
+<config_plugin>
+    <config>
+        <folder>*</folder>
+        <namepart type="variable">{processtitle}</namepart>
+    </config>
+</config_plugin>

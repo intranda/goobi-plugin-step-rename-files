@@ -1,0 +1,12 @@
+<config_plugin>
+    <config>
+        <folder>*</folder>
+        <namepart type="variable">
+            {processtitle}
+            <condition value="{projectname}" matches="ProjectABCD"/>
+        </namepart>
+        <namepart type="static">_</namepart>
+        <namepart type="counter">0000</namepart>
+    </config>
+</config_plugin>
+                

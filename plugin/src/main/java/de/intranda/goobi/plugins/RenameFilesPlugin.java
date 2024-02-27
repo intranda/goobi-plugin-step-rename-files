@@ -1,23 +1,25 @@
 package de.intranda.goobi.plugins;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
-import org.apache.commons.lang.StringUtils;
 import org.goobi.beans.Process;
 import org.goobi.beans.Processproperty;
 import org.goobi.beans.Step;
-import org.goobi.production.enums.LogType;
 import org.goobi.production.enums.PluginGuiType;
 import org.goobi.production.enums.PluginReturnValue;
 import org.goobi.production.enums.PluginType;
@@ -25,10 +27,10 @@ import org.goobi.production.enums.StepReturnValue;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import com.google.gson.Gson;
+import com.google.gson.annotations.SerializedName;
 
 import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.config.ConfigurationHelper;
-import de.sub.goobi.helper.Helper;
 import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.VariableReplacer;
 import de.sub.goobi.helper.exceptions.DAOException;
@@ -37,6 +39,7 @@ import de.sub.goobi.persistence.managers.PropertyManager;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
 import ugh.dl.Fileformat;
@@ -48,374 +51,50 @@ import ugh.exceptions.ReadException;
 public class RenameFilesPlugin implements IStepPluginVersion2 {
     private static final long serialVersionUID = -5097830334502599546L;
 
-    private static final String NAME_PART_TYPE_ORIGINALFILENAME = "originalfilename";
+    public static final String PROPERTY_TITLE = "plugin_intranda_step_rename_files";
+    private static final String NAME_PART_TYPE_STATIC = "static";
+    private static final String NAME_PART_TYPE_COUNTER = "counter";
+    private static final String NAME_PART_TYPE_VARIABLE = "variable";
+    private static final String NAME_PART_TYPE_ORIGINAL_FILE_NAME = "originalfilename";
+    private static final String CUSTOM_VARIABLE_ORIGINAL_FILE_NAME = "{" + NAME_PART_TYPE_ORIGINAL_FILE_NAME + "}";
 
-    @Getter
-    private Step step;
-    private String returnPath;
-    private transient List<NamePartConfiguration> namePartList;
-    private int startValue = 1;
-    private String folderConfigured = "*";
-    private static ConfigurationHelper configHelper = ConfigurationHelper.getInstance();
+    private Gson gson = new Gson();
+    private ConfigurationHelper configurationHelper = ConfigurationHelper.getInstance();
+    private MetsFileUpdater metsFileUpdater = MetsFileUpdater.getInstance();
 
     @Getter
     private String title = "intranda_step_rename_files";
     @Getter
     private PluginType type = PluginType.Step;
-
     @Getter
     private PluginGuiType pluginGuiType = PluginGuiType.NONE;
 
-    private static final String PROPERTY_TITLE = "plugin_intranda_step_rename_files";
+    private Process process;
     private Processproperty property;
+    @Getter
+    private Step step;
+    private String returnPath;
 
-    private Map<String, Map<String, String>> renamingLog = new HashMap<>();
+    private VariableReplacer variableReplacer;
+    private List<String> configuredFoldersToRename;
+    private RenamingFormatter renamingFormatter;
 
-    @SuppressWarnings("unchecked")
-    private void initializeProcessProperty(Process process) {
-        if (property != null) {
-            // already initialized
-            return;
-        }
-        List<Processproperty> props = PropertyManager.getProcessPropertiesForProcess(process.getId());
-        for (Processproperty p : props) {
-            if (PROPERTY_TITLE.equals(p.getTitel())) {
-                property = p;
-                break;
-            }
-        }
-        if (property == null) {
-            // no such property exists yet, create a new one
-            property = new Processproperty();
-            property.setProcessId(process.getId());
-            property.setTitel(PROPERTY_TITLE);
-        }
+    private boolean updateMetsFile;
+    // Must be visible in test to compare correct update
+    OriginalFileNameHistory originalFileNameHistory;
 
-        renamingLog.clear();
-        Gson gson = new Gson();
-        renamingLog = gson.fromJson(property.getWert(), Map.class);
-        // Initialize empty, if deserialization was not successful
-        if (renamingLog == null) {
-            renamingLog = new HashMap<>();
-        }
-    }
+    // ###################################################################################
+    // # Required plugin methods
+    // ###################################################################################
 
-    private void saveProcessProperty(Process process) {
-        Gson gson = new Gson();
-        String json = gson.toJson(renamingLog);
-        property.setWert(json);
-        log.debug(json);
-        PropertyManager.saveProcessProperty(property);
+    @Override
+    public HashMap<String, StepReturnValue> validate() {
+        return null; // NOSONAR
     }
 
     @Override
-    public PluginReturnValue run() {
-        Process process = step.getProzess();
-        List<Path> folders = new ArrayList<>();
-        initializeProcessProperty(process);
-
-        // prepare the VariableReplacer before trying to get the folder list, since it is needed when a folder is configured specifically
-        Fileformat fileformat = null;
-        VariableReplacer replacer = null;
-        try {
-            fileformat = process.readMetadataFile();
-            replacer = new VariableReplacer(fileformat != null ? fileformat.getDigitalDocument() : null,
-                    process.getRegelsatz().getPreferences(), process, step);
-        } catch (ReadException | IOException | SwapException | PreferencesException e1) {
-            log.error("Errors happened while trying to initialize the Fileformat and VariableReplacer.");
-            log.error(e1);
-        }
-
-        // get folder list
-        try {
-            getFolderList(process, folders, replacer, folderConfigured);
-
-        } catch (IOException | SwapException | DAOException e) {
-            log.error("Errors happened while trying to get the list of folders.");
-            log.error(e);
-        }
-
-        for (Path folder : folders) {
-            log.debug("object to rename: " + folder.getFileName().toString());
-        }
-
-        // create filename rule
-        for (NamePartConfiguration npc : namePartList) {
-            if ("variable".equalsIgnoreCase(npc.getNamePartType())) {
-                npc.setNamePartValue(replacer.replace(npc.getNamePartValue()));
-            } else if ("counter".equalsIgnoreCase(npc.getNamePartType())) {
-                npc.setFormat(new DecimalFormat(npc.getNamePartValue()));
-            }
-        }
-
-        // rename files in each folder
-        for (Path folder : folders) {
-            log.debug("start renaming inside of: " + folder.getFileName().toString());
-
-            try {
-                Map<String, String> folderRenamingLog = getFolderRenamingLog(folder);
-                renameFilesInFolder(folder, folderRenamingLog);
-            } catch (IOException e) {
-                log.error("IOException caught while trying to rename the files in " + folder.toString() + "\n\t" + e.getMessage());
-            }
-
-            // move all the files from the temp folder back again
-            try {
-                moveFilesFromTempBack(folder);
-            } catch (IOException e) {
-                log.error("IOException caught while trying to get files from the temp folder back.");
-            }
-        }
-
-        Helper.setMeldung("Renamed images in all folder");
-        Helper.addMessageToProcessJournal(process.getId(), LogType.DEBUG, "Renamed images in all folder", "");
-
-        saveProcessProperty(process);
-
-        return PluginReturnValue.FINISH;
-    }
-
-    private Map<String, String> getFolderRenamingLog(Path folder) {
-        String folderIdentifier = extractFolderIdentifier(folder);
-        if (!renamingLog.containsKey(folderIdentifier)) {
-            renamingLog.put(folderIdentifier, new HashMap<>());
-        }
-        return renamingLog.get(folderIdentifier);
-    }
-
-    private String extractFolderIdentifier(Path folder) {
-        return folder.getParent().getFileName().toString() + "_"
-                + folder.getFileName().toString().substring(folder.getFileName().toString().lastIndexOf("_") + 1);
-    }
-
-    /**
-     * get the list of folders whose files are to be renamed
-     * 
-     * @param process the Goobi process
-     * @param folders a List of Path that is supposed to maintain the results
-     * @param replacer VariableReplacer object that is to be used for the case of user-configured folders
-     * @param folderSpecified String that specifies the folder's name, any String value other than "*" will result in a length-one list containing
-     *            only this specified folder
-     * @throws IOException
-     * @throws SwapException
-     * @throws DAOException
-     */
-    private void getFolderList(Process process, List<Path> folders, VariableReplacer replacer, String folderSpecified)
-            throws IOException, SwapException, DAOException {
-        if (StringUtils.isBlank(folderSpecified) || "*".equals(folderSpecified)) {
-            getFolderListDefault(process, folders);
-        } else {
-            getFolderListConfigured(process, folders, replacer);
-        }
-    }
-
-    /**
-     * get the list of folders under default settings
-     * 
-     * @param process the Goobi process
-     * @param folders a List of Path that is supposed to maintain the results
-     * @throws IOException
-     * @throws SwapException
-     * @throws DAOException
-     */
-    private void getFolderListDefault(Process process, List<Path> folders) throws IOException, SwapException, DAOException {
-        Path masterFolder = Paths.get(process.getImagesOrigDirectory(false));
-        Path derivateFolder = Paths.get(process.getImagesTifDirectory(false));
-        Path altoFolder = Paths.get(process.getOcrAltoDirectory());
-        Path pdfFolder = Paths.get(process.getOcrPdfDirectory());
-        Path txtFolder = Paths.get(process.getOcrTxtDirectory());
-        Path xmlFolder = Paths.get(process.getOcrXmlDirectory());
-
-        if (Files.exists(masterFolder)) {
-            log.debug("add masterfolder: " + masterFolder.getFileName().toString());
-            folders.add(masterFolder);
-        }
-        if (Files.exists(derivateFolder) && !masterFolder.getFileName().toString().equals(derivateFolder.getFileName().toString())) {
-            log.debug("add derivateFolder: " + derivateFolder.getFileName().toString());
-            folders.add(derivateFolder);
-        }
-
-        if (Files.exists(altoFolder)) {
-            log.debug("add altoFolder: " + altoFolder.getFileName().toString());
-            folders.add(altoFolder);
-        }
-        if (Files.exists(pdfFolder)) {
-            log.debug("add pdfFolder: " + pdfFolder.getFileName().toString());
-            folders.add(pdfFolder);
-        }
-        if (Files.exists(txtFolder)) {
-            log.debug("add txtFolder: " + txtFolder.getFileName().toString());
-            folders.add(txtFolder);
-        }
-        if (Files.exists(xmlFolder)) {
-            log.debug("add xmlFolder: " + xmlFolder.getFileName().toString());
-            folders.add(xmlFolder);
-        }
-    }
-
-    /**
-     * get the list of folders given user-configured settings
-     * 
-     * @param process the Goobi process
-     * @param folders a List of Path that is supposed to maintain the results
-     * @param replacer VariableReplacer object
-     * @throws IOException
-     * @throws SwapException
-     */
-    private void getFolderListConfigured(Process process, List<Path> folders, VariableReplacer replacer) throws IOException, SwapException {
-        if (replacer == null) {
-            // an error should be triggered here since replacer is needed
-            log.error("VariableReplacer is needed here, but it is null!");
-            throw new SwapException("Null is not a valid VariableReplacer!");
-        }
-        String folder = configHelper.getAdditionalProcessFolderName(folderConfigured);
-        log.debug("folderConfigured before replacement = " + folder);
-        folder = replacer.replace(folder);
-        log.debug("folderConfigured after replacement = " + folder);
-        Path configuredFolder = Paths.get(process.getImagesDirectory(), folder);
-
-        if (Files.exists(configuredFolder)) {
-            log.debug("add configuredFolder: " + configuredFolder.getFileName().toString());
-            folders.add(configuredFolder);
-        }
-    }
-
-    /**
-     * rename all files in the given folder
-     * 
-     * @param folder the Path of the folder whose files should be renamed
-     * @throws IOException
-     */
-    private void renameFilesInFolder(Path folder, Map<String, String> folderRenamingLog) throws IOException {
-        if (!StorageProvider.getInstance().isDirectory(folder)) {
-            throw new IOException("Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is not a directory");
-        }
-
-        int counter = startValue;
-        List<Path> filesInFolder = StorageProvider.getInstance().listFiles(folder.toString());
-        for (Path file : filesInFolder) {
-            if (StorageProvider.getInstance().isDirectory(file)) {
-                throw new IOException("Cannot rename file in directory. The given path \"" + file.toString() + "\" is a directory");
-            }
-            log.debug("start renaming file: " + file.getFileName().toString());
-            String oldFileName = file.getFileName().toString();
-            String extension = oldFileName.substring(oldFileName.lastIndexOf(".") + 1);
-            // check if it is the barcode image
-            String fileName = null;
-            // TODO check, if the counter is set to "0"
-            if (oldFileName.contains("barcode")) {
-                //    rename it with '0' as counter
-                fileName = generateNewFileName(folderRenamingLog, oldFileName, 0, extension);
-            } else {
-                // create new filename
-                fileName = generateNewFileName(folderRenamingLog, oldFileName, counter, extension);
-                counter++;
-            }
-            // if old and new filename don't match, rename it
-            if (!oldFileName.equals(fileName) && tryRenameFile(file, fileName)) {
-                updateRenameLog(folderRenamingLog, oldFileName, fileName);
-            }
-        }
-    }
-
-    private void updateRenameLog(Map<String, String> renamingLog, String from, String to) {
-        String originalFileName = from;
-        if (renamingLog.containsKey(from)) {
-            originalFileName = renamingLog.get(from);
-            renamingLog.remove(from);
-        }
-        renamingLog.put(to, originalFileName);
-    }
-
-    /**
-     * get the new name for a file
-     * 
-     * @param counter the ordinal number of the file among all files in the same folder
-     * @param extension the file extension
-     * @return
-     */
-    private String generateNewFileName(Map<String, String> folderRenamingLog, String currentFileName, int counter, String extension) {
-        StringBuilder sb = new StringBuilder();
-        for (NamePartConfiguration npc : namePartList) {
-            if (npc.getFormat() != null) {
-                sb.append(npc.getFormat().format(counter));
-            } else if (NAME_PART_TYPE_ORIGINALFILENAME.equals(npc.getNamePartType())) {
-                String originalFileName = folderRenamingLog.getOrDefault(currentFileName, currentFileName);
-                sb.append(getFileNameWithoutExtension(originalFileName));
-            } else {
-                sb.append(npc.getNamePartValue());
-            }
-        }
-        if (StringUtils.isNotBlank(extension)) {
-            sb.append(".");
-            sb.append(extension);
-        }
-        return sb.toString();
-    }
-
-    private String getFileNameWithoutExtension(String originalFileName) {
-        if (!originalFileName.contains(".")) {
-            return originalFileName;
-        }
-        return originalFileName.substring(0, originalFileName.lastIndexOf('.'));
-    }
-
-    /**
-     * try to rename a file
-     * 
-     * @param filePath the Path of the file which is to be renamed
-     * @param newFileName the new name of the file
-     * @return true, if the renaming was successful
-     * @throws IOException
-     */
-    private boolean tryRenameFile(Path filePath, String newFileName) throws IOException {
-        Path targetPath = Paths.get(filePath.getParent().toString(), newFileName);
-        if (StorageProvider.getInstance().isFileExists(targetPath)) {
-            log.debug("targetPath is occupied: " + targetPath.toString());
-            log.debug("Moving the file " + newFileName + " to temp folder for the moment instead.");
-            // move files to a temp folder
-            moveFileToTempFolder(filePath, newFileName);
-            return false;
-        } else {
-            StorageProvider.getInstance().move(filePath, targetPath);
-            return true;
-        }
-    }
-
-    /**
-     * move files whose new names have conflictions with other files to a temp folder for the moment
-     * 
-     * @param filePath the Path of the file which is to be moved
-     * @param fileName the new name of this file
-     * @throws IOException
-     */
-    private void moveFileToTempFolder(Path filePath, String newFileName) throws IOException {
-        String tempFolder = "temp";
-        Path tempFolderPath = Paths.get(filePath.getParent().toString(), tempFolder);
-        if (!StorageProvider.getInstance().isFileExists(tempFolderPath)) {
-            StorageProvider.getInstance().createDirectories(tempFolderPath);
-        }
-        StorageProvider.getInstance().move(filePath, Paths.get(tempFolderPath.toString(), newFileName));
-    }
-
-    /**
-     * move files back from the temp folder
-     * 
-     * @param folderPath the Path of the folder whose files have just been renamed
-     * @throws IOException
-     */
-    private void moveFilesFromTempBack(Path folderPath) throws IOException {
-        String tempFolder = "temp";
-        Path tempFolderPath = Paths.get(folderPath.toString(), tempFolder);
-        if (StorageProvider.getInstance().isFileExists(tempFolderPath)) {
-            log.debug("Moving files back from the temp folder: " + tempFolderPath.toString());
-            List<Path> files = StorageProvider.getInstance().listFiles(tempFolderPath.toString());
-            for (Path file : files) {
-                StorageProvider.getInstance().move(file, Paths.get(folderPath.toString(), file.getFileName().toString()));
-            }
-            StorageProvider.getInstance().deleteDir(tempFolderPath);
-            log.debug("Temp folder deleted: " + tempFolderPath.toString());
-        }
+    public int getInterfaceVersion() {
+        return 0;
     }
 
     @Override
@@ -438,48 +117,525 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         return null;
     }
 
+    // ###################################################################################
+    // # Original File Name History class
+    // ###################################################################################
+
+    class OriginalFileNameHistory {
+        @SerializedName("originalFileNameMapping")
+        private Map<String, Map<String, String>> perFolderCurrentToOriginalFileNameMapping = new HashMap<>();
+
+        public String getOriginalFileNameOf(Path currentFilePath) {
+            Map<String, String> folderMapping = getOriginalFileNameMappingOfFolder(extractFolderIdentifier(currentFilePath));
+            String currentFileName = extractFileName(currentFilePath);
+            if (!folderMapping.containsKey(currentFileName)) {
+                return currentFileName;
+            }
+            return folderMapping.get(currentFileName);
+        }
+
+        public void updateFileName(Path from, Path to) {
+            String fromFolder = extractFolderIdentifier(from);
+            String toFolder = extractFolderIdentifier(to);
+            if (!fromFolder.equals(toFolder)) {
+                throw new IllegalArgumentException("Moving files between folders (" + fromFolder + " -> " + toFolder + ") not permitted!");
+            }
+            Map<String, String> folderMapping = getOriginalFileNameMappingOfFolder(fromFolder);
+            String fromFile = extractFileName(from);
+            String toFile = extractFileName(to);
+            String originalFileName = fromFile;
+            if (folderMapping.containsKey(fromFile)) {
+                originalFileName = folderMapping.get(fromFile);
+                folderMapping.remove(fromFile);
+            }
+            folderMapping.put(toFile, originalFileName);
+        }
+
+        private String extractFolderIdentifier(Path path) {
+            // If path is pointing to a file, use the parent directory for folder identifier calculation
+            if (path.getFileName().toString().contains(".")) {
+                path = path.getParent();
+            }
+            return path.getParent().getFileName().toString() + "_"
+                    + path.getFileName().toString().substring(path.getFileName().toString().lastIndexOf("_") + 1);
+        }
+
+        private String extractFileName(Path path) {
+            return path.getFileName().toString();
+        }
+
+        private Map<String, String> getOriginalFileNameMappingOfFolder(String folderIdentifier) {
+            if (!perFolderCurrentToOriginalFileNameMapping.containsKey(folderIdentifier)) {
+                perFolderCurrentToOriginalFileNameMapping.put(folderIdentifier, new HashMap<>());
+            }
+            return perFolderCurrentToOriginalFileNameMapping.get(folderIdentifier);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || !(o instanceof OriginalFileNameHistory)) {
+                return false;
+            }
+            OriginalFileNameHistory other = (OriginalFileNameHistory) o;
+            return other.perFolderCurrentToOriginalFileNameMapping.equals(perFolderCurrentToOriginalFileNameMapping);
+        }
+
+        @Override
+        public String toString() {
+            return perFolderCurrentToOriginalFileNameMapping.toString();
+        }
+    }
+
+    // ###################################################################################
+    // # Name formatter classes
+    // ###################################################################################
+
+    class OverlayVariableReplacer {
+        private final VariableReplacer variableReplacer;
+
+        public OverlayVariableReplacer(VariableReplacer variableReplacer) {
+            this.variableReplacer = variableReplacer;
+        }
+
+        public String replace(Path fileName, String replacement) {
+            replacement = internalReplacer(fileName, replacement);
+            return variableReplacer.replace(replacement);
+        }
+
+        private String internalReplacer(Path fileName, String replacement) {
+            if (CUSTOM_VARIABLE_ORIGINAL_FILE_NAME.equals(replacement)) {
+                String originalFileName = originalFileNameHistory.getOriginalFileNameOf(fileName);
+                // Remove file extension
+                int fileExtensionIndex = originalFileName.lastIndexOf('.');
+                return originalFileName.substring(0, fileExtensionIndex);
+            }
+            return replacement;
+        }
+    }
+
+    class RenamingFormatter {
+        @NonNull
+        private final List<NamePart> nameParts;
+        @NonNull
+        @Getter
+        private final OverlayVariableReplacer replacer;
+        @Getter
+        private final int startValue;
+
+        public RenamingFormatter(OverlayVariableReplacer replacer, List<NamePart> nameParts, int startValue) {
+            this.replacer = replacer;
+            this.nameParts = nameParts;
+            this.startValue = startValue;
+            reset();
+        }
+
+        public void reset() {
+            nameParts.stream().forEach(np -> np.reset(this));
+        }
+
+        public String generateNewName(Path oldName) {
+            StringBuilder sb = new StringBuilder();
+            nameParts.stream().forEachOrdered(np -> sb.append(np.generateNamePart(oldName)));
+            return sb.toString();
+        }
+    }
+
+    @Data
+    @RequiredArgsConstructor
+    abstract class NamePart {
+        private OverlayVariableReplacer replacer;
+
+        public boolean allConditionsMatch(Path oldName) {
+            return this.conditions.stream().allMatch(c -> c.matches(replacer, oldName));
+        }
+
+        @NonNull
+        private List<NamePartReplacement> replacements;
+        @NonNull
+        private List<NamePartCondition> conditions;
+
+        public String generateNamePart(Path oldName) {
+            if (!allConditionsMatch(oldName)) {
+                return "";
+            }
+            String result = generate(oldName);
+            for (NamePartReplacement r : replacements) {
+                result = r.replace(result);
+            }
+            return result;
+        }
+
+        protected abstract String generate(Path oldName);
+
+        protected void reset(RenamingFormatter parent) {
+            this.replacer = parent.getReplacer();
+        }
+    }
+
+    @RequiredArgsConstructor
+    class NamePartCondition {
+        public boolean matches(OverlayVariableReplacer replacer, Path oldName) {
+            String replacedValue = replacer.replace(oldName, value);
+            return replacedValue.matches(matches);
+        }
+
+        @NonNull
+        private String value;
+        @NonNull
+        private String matches;
+    }
+
+    @RequiredArgsConstructor
+    class NamePartReplacement {
+        public String replace(String value) {
+            return value.replaceAll(regex, replacement);
+        }
+
+        @NonNull
+        private String regex;
+        @NonNull
+        private String replacement;
+    }
+
+    class StaticNamePart extends NamePart {
+        private String staticPart;
+
+        public StaticNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String staticPart) {
+            super(replacements, conditions);
+            this.staticPart = staticPart;
+        }
+
+        @Override
+        protected String generate(Path oldName) {
+            return this.staticPart;
+        }
+    }
+
+    class CounterNamePart extends NamePart {
+        private NumberFormat format;
+        private int counter = 1;
+
+        public CounterNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String format) {
+            super(replacements, conditions);
+            this.format = new DecimalFormat(format);
+        }
+
+        @Override
+        protected String generate(Path oldName) {
+            return format.format(counter++);
+        }
+
+        @Override
+        protected void reset(RenamingFormatter parent) {
+            super.reset(parent);
+            this.counter = parent.getStartValue();
+        }
+    }
+
+    class VariableNamePart extends NamePart {
+        private String rawString;
+
+        public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString) {
+            super(replacements, conditions);
+            this.rawString = rawString;
+        }
+
+        @Override
+        protected String generate(Path oldName) {
+            return getReplacer().replace(oldName, rawString);
+        }
+    }
+
+    // ###################################################################################
+    // # Plugin initialization and formatter setup
+    // ###################################################################################
+
     @Override
     public void initialize(Step step, String returnPath) {
         log.debug("================= Starting RenameFilesPlugin =================");
         this.step = step;
+        this.process = step.getProzess();
         this.returnPath = returnPath;
-        SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
-        initConfig(myconfig);
-    }
-
-    private void initConfig(SubnodeConfiguration config) {
-        startValue = config.getInt("startValue", 1);
-        folderConfigured = config.getString("folder", "*");
-        log.debug("folderConfigured = " + folderConfigured);
-        namePartList = new ArrayList<>();
-        List<HierarchicalConfiguration> fields = config.configurationsAt("namepart");
-        for (HierarchicalConfiguration hc : fields) {
-            NamePartConfiguration npc = new NamePartConfiguration(hc.getString("."), hc.getString("@type", "static"));
-            namePartList.add(npc);
+        // TODO: Plugin initialization should also throw exceptions!
+        try {
+            this.variableReplacer = getVariableReplacer();
+            SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
+            loadPluginConfiguration(myconfig);
+        } catch (PluginException e) {
+            log.error(e.getMessage());
+            log.error(e);
         }
     }
 
-    @Override
-    public HashMap<String, StepReturnValue> validate() {
-        return null; //NOSONAR
+    private VariableReplacer getVariableReplacer() throws PluginException {
+        try {
+            Fileformat fileformat = process.readMetadataFile();
+            return new VariableReplacer(fileformat != null ? fileformat.getDigitalDocument() : null,
+                    process.getRegelsatz().getPreferences(), process, step);
+        } catch (ReadException | IOException | SwapException | PreferencesException e1) {
+            throw new PluginException("Errors happened while trying to initialize the Fileformat and VariableReplacer", e1);
+        }
     }
 
-    @Override
-    public int getInterfaceVersion() {
-        return 0;
+    private void loadPluginConfiguration(SubnodeConfiguration config) throws PluginException {
+        configuredFoldersToRename = config.getList("folder", List.of("*"))
+                .stream()
+                .map(Object::toString)
+                .collect(Collectors.toList());
+        log.debug("configuredFoldersToRename = " + configuredFoldersToRename);
+
+        int counterStartValue = config.getInt("startValue", 1);
+
+        try {
+            List<NamePart> nameParts = config.configurationsAt("namepart")
+                    .stream()
+                    .map(this::parseNamePartConfiguration)
+                    .collect(Collectors.toList());
+            renamingFormatter = new RenamingFormatter(new OverlayVariableReplacer(getVariableReplacer()), nameParts, counterStartValue);
+        } catch (IllegalArgumentException e) {
+            throw new PluginException("Error during namepart parsing!", e);
+        }
+
+        this.updateMetsFile = config.getBoolean("metsFile/update", false);
     }
 
-    @Data
-    public class NamePartConfiguration {
-        private String namePartValue;
-        @NonNull
-        private String namePartType;
+    private NamePart parseNamePartConfiguration(HierarchicalConfiguration namePartXML) throws IllegalArgumentException {
+        String type = namePartXML.getString("@type");
+        String value = namePartXML.getString(".");
+        List<NamePartReplacement> replacements = parseReplacements(namePartXML.configurationsAt("replace"));
+        List<NamePartCondition> conditions = parseConditions(namePartXML.configurationsAt("condition"));
 
-        private NumberFormat format;
+        switch (type) {
+            case NAME_PART_TYPE_STATIC:
+                return new StaticNamePart(replacements, conditions, value);
+            case NAME_PART_TYPE_COUNTER:
+                return new CounterNamePart(replacements, conditions, value);
+            case NAME_PART_TYPE_VARIABLE:
+                return new VariableNamePart(replacements, conditions, value);
+            case NAME_PART_TYPE_ORIGINAL_FILE_NAME:
+                return new VariableNamePart(replacements, conditions, CUSTOM_VARIABLE_ORIGINAL_FILE_NAME);
+            default:
+                throw new IllegalArgumentException("Unable to parse namepart configuration of type \"" + type + "\"!");
+        }
+    }
 
-        NamePartConfiguration(String namePartValue, String namePartType) {
-            this.namePartValue = namePartValue;
-            this.namePartType = namePartType;
+    private @NonNull List<NamePartReplacement> parseReplacements(
+            List<HierarchicalConfiguration> replacementConfigs) {
+        return replacementConfigs.stream()
+                .map(config -> new NamePartReplacement(config.getString("@regex", ""),
+                        config.getString("@replacement", "")))
+                .collect(Collectors.toList());
+    }
+
+    private @NonNull List<NamePartCondition> parseConditions(List<HierarchicalConfiguration> configs) {
+        return configs.stream()
+                .map(
+                        config -> new NamePartCondition(config.getString("@value", ""), config.getString("@matches", "")))
+                .collect(Collectors.toList());
+    }
+
+    private Processproperty initializeProcessProperty(Process process) {
+        List<Processproperty> props = PropertyManager.getProcessPropertiesForProcess(process.getId());
+        for (Processproperty p : props) {
+            if (PROPERTY_TITLE.equals(p.getTitel())) {
+                return p;
+            }
+        }
+
+        property = new Processproperty();
+        property.setProcessId(process.getId());
+        property.setTitel(PROPERTY_TITLE);
+
+        return property;
+    }
+
+    private void updateProcessPropertyWithNewFileNameHistory() {
+        property.setWert(serializeOriginalFileNameHistoryIntoJson(originalFileNameHistory));
+    }
+
+    private void saveProcessProperty() {
+        PropertyManager.saveProcessProperty(property);
+    }
+
+    private OriginalFileNameHistory deserializeOriginalFileNameHistoryFromJson(String json) {
+        OriginalFileNameHistory originalFileNameHistory = gson.fromJson(json, OriginalFileNameHistory.class);
+        // Initialize empty, if deserialization was not successful
+        if (originalFileNameHistory == null) {
+            originalFileNameHistory = new OriginalFileNameHistory();
+        }
+        return originalFileNameHistory;
+    }
+
+    private String serializeOriginalFileNameHistoryIntoJson(OriginalFileNameHistory originalFileNameHistory) {
+        return gson.toJson(originalFileNameHistory);
+    }
+
+    // ###################################################################################
+    // # Renaming Algorithm
+    // ###################################################################################
+
+    @Override
+    public PluginReturnValue run() {
+        try {
+            property = initializeProcessProperty(step.getProzess());
+            originalFileNameHistory = deserializeOriginalFileNameHistoryFromJson(this.property.getWert());
+            List<Path> foldersToRename = determineFoldersToRename();
+            Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
+            if (renamingMapping.isEmpty()) {
+                log.info("Nothing to rename.");
+                return PluginReturnValue.FINISH;
+            }
+            // Find an order of renamings that is conflict free (i. e. does not rename a file to a name that is already present due to ordering issues)
+            List<Path> orderedRenamingOrigins = findConflictFreeRenamingOrder(renamingMapping);
+            if (!canRenamingWithoutConflicts(renamingMapping, orderedRenamingOrigins)) {
+                log.error("Cannot perform renaming without conflicts. Aborting...");
+                return PluginReturnValue.ERROR;
+            }
+            performRenaming(renamingMapping, orderedRenamingOrigins);
+            if (updateMetsFile) {
+                metsFileUpdater.updateMetsFile(process, renamingMapping);
+            }
+            updateProcessPropertyWithNewFileNameHistory();
+            saveProcessProperty();
+        } catch (IOException | PluginException | SwapException | DAOException e) {
+            log.error(e.getMessage());
+            log.error(e);
+            return PluginReturnValue.ERROR;
+        }
+
+        return PluginReturnValue.FINISH;
+    }
+
+    private List<Path> determineFoldersToRename() throws IOException, SwapException, DAOException {
+        List<Path> result = new LinkedList<>();
+        for (String folderSpecification : configuredFoldersToRename) {
+            result.addAll(determineRealPathsForConfiguredFolder(folderSpecification));
+        }
+        return result.stream().distinct().collect(Collectors.toList());
+    }
+
+    private List<Path> determineRealPathsForConfiguredFolder(String configuredFolder) throws IOException, SwapException, DAOException {
+        if ("*".equals(configuredFolder)) {
+            return determineDefaultFoldersToRename();
+        } else {
+            return transformConfiguredFolderSpecificationToRealPath(configuredFolder);
+        }
+    }
+
+    private List<Path> determineDefaultFoldersToRename() throws IOException, SwapException, DAOException {
+        return List.of(
+                Paths.get(process.getImagesOrigDirectory(false)),
+                Paths.get(process.getImagesTifDirectory(false)),
+                Paths.get(process.getOcrAltoDirectory()),
+                Paths.get(process.getOcrPdfDirectory()),
+                Paths.get(process.getOcrTxtDirectory()),
+                Paths.get(process.getOcrXmlDirectory()))
+                .stream()
+                .filter(this::pathIsPresent)
+                .collect(Collectors.toList());
+    }
+
+    private List<Path> transformConfiguredFolderSpecificationToRealPath(String folderSpecification) throws IOException, SwapException {
+        String folder = configurationHelper.getAdditionalProcessFolderName(folderSpecification);
+        folder = variableReplacer.replace(folder);
+        Path configuredFolder = Paths.get(process.getImagesDirectory(), folder);
+        return List.of(configuredFolder);
+    }
+
+    private boolean pathIsPresent(Path path) {
+        return StorageProvider.getInstance().isDirectory(path);
+    }
+
+    private Map<Path, Path> determineRenamingForAllFilesInAllFolders(List<Path> foldersToRename) throws PluginException {
+        Map<Path, Path> result = new TreeMap<>();
+        for (Path folder : foldersToRename) {
+            result.putAll(determineRenamingForAllFilesInFolder(folder));
+        }
+        return result;
+    }
+
+    private Map<Path, Path> determineRenamingForAllFilesInFolder(Path folder) throws PluginException {
+        if (!StorageProvider.getInstance().isDirectory(folder)) {
+            throw new PluginException("Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is not a directory");
+        }
+
+        Map<Path, Path> result = new TreeMap<>();
+
+        List<Path> filesToRename = StorageProvider.getInstance().listFiles(folder.toString());
+        Collections.sort(filesToRename);
+        renamingFormatter.reset();
+
+        for (Path file : filesToRename) {
+            String oldFullFileName = file.getFileName().toString();
+            int extensionIndex = oldFullFileName.lastIndexOf(".");
+            String fileExtension = oldFullFileName.substring(extensionIndex + 1);
+            String newFullFileName = renamingFormatter.generateNewName(file) + "." + fileExtension;
+
+            if (!oldFullFileName.equals(newFullFileName)) {
+                result.put(Paths.get(folder.toString(), oldFullFileName), Paths.get(folder.toString(), newFullFileName));
+            }
+        }
+
+        return result;
+    }
+
+    private List<Path> findConflictFreeRenamingOrder(Map<Path, Path> renamingMapping) {
+        Map<Path, Path> temporaryMapping = new HashMap<>(renamingMapping);
+        List<Path> orderedFileRenamingSources = new LinkedList<>();
+        while (!temporaryMapping.isEmpty()) {
+            Optional<Path> conflictFreeRenamingSource = findConflictFreeRenamingSource(temporaryMapping);
+            if (conflictFreeRenamingSource.isPresent()) {
+                orderedFileRenamingSources.add(conflictFreeRenamingSource.get());
+                temporaryMapping.remove(conflictFreeRenamingSource.get());
+            }
+        }
+        return orderedFileRenamingSources;
+    }
+
+    private Optional<Path> findConflictFreeRenamingSource(Map<Path, Path> temporaryMapping) {
+        for (Map.Entry<Path, Path> e : temporaryMapping.entrySet()) {
+            if (isConflictFree(temporaryMapping, e)) {
+                return Optional.of(e.getKey());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private boolean isConflictFree(Map<Path, Path> mapping, Entry<Path, Path> itemToCheck) {
+        for (Map.Entry<Path, Path> e : mapping.entrySet()) {
+            if (itemToCheck.getValue().equals(e.getKey())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean canRenamingWithoutConflicts(Map<Path, Path> renamingMapping, List<Path> orderedRenamingOrigins) {
+        // Only rename a file once
+        if (renamingMapping.keySet().stream().distinct().count() != renamingMapping.size()) {
+            return false;
+        }
+        // Only rename to any file once
+        if (renamingMapping.values().stream().distinct().count() != renamingMapping.size()) {
+            return false;
+        }
+        // Rename all files
+        if (renamingMapping.size() != orderedRenamingOrigins.size()) {
+            return false;
+        }
+        return true;
+    }
+
+    private void performRenaming(Map<Path, Path> renamingMap, List<Path> orderedRenamingOrigins) throws IOException {
+        try {
+            for (Path from : orderedRenamingOrigins) {
+                Path to = renamingMap.get(from);
+                StorageProvider.getInstance().move(from, to);
+                originalFileNameHistory.updateFileName(from, to);
+            }
+        } catch (IOException e) {
+            log.error("Error during renaming. The renamed files might be inconsistent");
+            throw e;
         }
     }
 }

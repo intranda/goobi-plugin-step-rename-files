@@ -9,7 +9,12 @@
         <folder>greyscale</folder>
         
         <startValue>2</startValue>
-        <namepart type="variable">{processtitle}</namepart>
+        <!-- Replacement removed anything in the process title before and including the '_' -->
+        <namepart type="variable">
+            {processtitle}
+            <replace regex="^.*?_" replacement=""/>
+            <condition value="{meta._imageFilePrefix}" matches="^$"/>
+        </namepart>
         <namepart type="static">_</namepart>
         <namepart type="counter">00000</namepart>
     </config>
@@ -31,6 +36,14 @@
         <startValue>0</startValue>
         <namepart type="variable">{processtitle}</namepart>
         <namepart type="static">_</namepart>
-        <namepart type="counter">00000</namepart>
+        <!-- Conditional name parts (mimic old barcode feature) -->
+        <namepart type="counter">
+            0000
+            <condition value="{originalfilename}" matches="^(?!.*barcode).*$" />
+        </namepart>
+        <namepart type="static">
+            0000
+            <condition value="{originalfilename}" matches="^.*barcode.*$" />
+        </namepart>
     </config>
 </config_plugin>
