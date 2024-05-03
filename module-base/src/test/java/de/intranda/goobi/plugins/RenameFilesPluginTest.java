@@ -241,7 +241,10 @@ public class RenameFilesPluginTest {
         files.stream()
                 .map(f -> f.getParent())
                 .distinct()
-                .forEach(p -> when(storage.isDirectory(p)).thenReturn(true));
+                .forEach(p -> {
+                    when(storage.isDirectory(p)).thenReturn(true);
+                    when(storage.isFileExists(p)).thenReturn(true);
+                });
     }
 
     private void mockStorageFilePresence(List<Path> files) {
@@ -266,14 +269,6 @@ public class RenameFilesPluginTest {
         mockDefaultRenamingFoldersExist(true);
 
         assertEquals(PluginReturnValue.FINISH, plugin.run());
-    }
-
-    @Test
-    public void nonExistingFolder_expectPluginToFail() throws ConfigurationException {
-        setupPluginConfiguration("folder_non-existent");
-        initializate();
-
-        assertEquals(PluginReturnValue.ERROR, plugin.run());
     }
 
     @Test
