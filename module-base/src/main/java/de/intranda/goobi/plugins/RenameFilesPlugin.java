@@ -206,8 +206,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             if (CUSTOM_VARIABLE_ORIGINAL_FILE_NAME.equals(replacement)) {
                 String originalFileName = originalFileNameHistory.getOriginalFileNameOf(fileName);
                 // Remove file extension
-                int fileExtensionIndex = originalFileName.lastIndexOf('.');
-                return originalFileName.substring(0, fileExtensionIndex);
+                if (originalFileName.contains(".")) {
+                    int fileExtensionIndex = originalFileName.lastIndexOf('.');
+                    originalFileName = originalFileName.substring(0, fileExtensionIndex);
+                }
+                return originalFileName;
             }
             return replacement;
         }
@@ -378,7 +381,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     private void loadPluginConfiguration(SubnodeConfiguration config) throws PluginException {
-        configuredFoldersToRename = config.getList("folder", List.of("*"))
+        configuredFoldersToRename = config.getList("folder")
                 .stream()
                 .map(Object::toString)
                 .collect(Collectors.toList());
@@ -480,6 +483,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             property = initializeProcessProperty(step.getProzess());
             originalFileNameHistory = deserializeOriginalFileNameHistoryFromJson(this.property.getWert());
             List<Path> foldersToRename = determineFoldersToRename();
+            log.trace("Performing renaming in these folders: " + foldersToRename.stream().map(Path::toString).collect(Collectors.joining(", ")));
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
             if (renamingMapping.isEmpty()) {
                 log.info("Nothing to rename.");
@@ -555,8 +559,12 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     private Map<Path, Path> determineRenamingForAllFilesInFolder(Path folder) throws PluginException {
+        // This checks if the file == directory exists
+        if (!StorageProvider.getInstance().isFileExists(folder)) {
+            return Collections.emptyMap();
+        }
         if (!StorageProvider.getInstance().isDirectory(folder)) {
-            throw new PluginException("Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is not a directory");
+            throw new PluginException("Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is a file and not a directory!");
         }
 
         Map<Path, Path> result = new TreeMap<>();
