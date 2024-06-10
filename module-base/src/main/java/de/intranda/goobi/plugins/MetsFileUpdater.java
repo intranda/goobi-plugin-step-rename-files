@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.goobi.beans.Process;
 
 import de.sub.goobi.helper.exceptions.SwapException;
+import lombok.extern.log4j.Log4j2;
 import ugh.dl.ContentFile;
 import ugh.dl.DigitalDocument;
 import ugh.dl.FileSet;
@@ -17,6 +18,7 @@ import ugh.exceptions.PreferencesException;
 import ugh.exceptions.ReadException;
 import ugh.exceptions.WriteException;
 
+@Log4j2
 public class MetsFileUpdater {
     private static MetsFileUpdater instance;
 
@@ -35,8 +37,12 @@ public class MetsFileUpdater {
             List<ContentFile> filesList = fileSet.getAllFiles();
             for (ContentFile file : filesList) {
                 String oldLocation = file.getLocation();
-                String newLocation = lookUpNewLocation(renamingMapping, oldLocation);
-                file.setLocation(newLocation);
+                try {
+                    String newLocation = lookUpNewLocation(renamingMapping, oldLocation);
+                    file.setLocation(newLocation);
+                } catch (IllegalArgumentException e) {
+                    log.debug("Cannot update file reference {}: {}", oldLocation, e.toString());
+                }
             }
 
             process.writeMetadataFile(fileformat);
