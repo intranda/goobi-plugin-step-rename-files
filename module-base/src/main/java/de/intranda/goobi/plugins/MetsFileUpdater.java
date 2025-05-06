@@ -69,7 +69,7 @@ public class MetsFileUpdater {
         String[] from = renamingEntry.getKey().toString().split("/");
         String[] old = oldLocation.split("/");
 
-        int maxComparisons = 3;
+        int maxComparisons = 2;
         int fromIndex = from.length - 1;
         int oldIndex = old.length - 1;
         int comparisons = 0;
