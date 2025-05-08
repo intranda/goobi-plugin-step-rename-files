@@ -354,15 +354,21 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     class VariableNamePart extends NamePart {
         private String rawString;
+        private Optional<String> format;
 
-        public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString) {
+        public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString, String format) {
             super(replacements, conditions);
             this.rawString = rawString;
+            this.format = Optional.ofNullable(format);
         }
 
         @Override
         protected String generate(Path oldName) {
-            return getReplacer().replace(oldName, rawString);
+            var result = getReplacer().replace(oldName, rawString);
+            if (format.isPresent()) {
+                result = formatString(format.get(), result);
+            }
+            return result;
         }
     }
 
@@ -370,12 +376,14 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         private String metadataName;
         private String docStructLevel;
         private Optional<String> fallback;
+        private Optional<String> format;
 
-        public MetadataNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String metadataName, String docStructLevel, String fallback) {
+        public MetadataNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String metadataName, String docStructLevel, String fallback, String format) {
             super(replacements, conditions);
             this.metadataName = metadataName;
             this.docStructLevel = docStructLevel;
             this.fallback = Optional.ofNullable(fallback);
+            this.format = Optional.ofNullable(format);
         }
 
         @Override
@@ -387,8 +395,25 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                     .filter(md -> md.getType().getName().equals(this.metadataName))
                     .toList();
 
-            return matchingMetadata.stream().findFirst().map(Metadata::getValue)
+            var result =  matchingMetadata.stream().findFirst().map(Metadata::getValue)
                     .orElse(this.fallback.orElse("MISSING"));
+            if (format.isPresent()) {
+                result = formatString(format.get(), result);
+            }
+            return result;
+        }
+    }
+
+    private String formatString(String format, String value) {
+        try {
+             return String.format(format, value);
+        } catch (IllegalFormatException e) {
+            try {
+                return String.format(format, Integer.parseInt(value));
+            } catch (NumberFormatException e1) {
+                log.error("Illegal format string: {} for value: {}", format, value);
+                return value;
+            }
         }
     }
 
@@ -488,6 +513,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         String type = namePartXML.getString("@type");
         String level = namePartXML.getString("@level", null);
         String fallback = namePartXML.getString("@fallback", null);
+        String format = namePartXML.getString("@format", null);
         String value = namePartXML.getString(".");
         List<NamePartReplacement> replacements = parseReplacements(namePartXML.configurationsAt("replace"));
         List<NamePartCondition> conditions = parseConditions(namePartXML.configurationsAt("condition"));
@@ -498,11 +524,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             case NAME_PART_TYPE_COUNTER:
                 return new CounterNamePart(replacements, conditions, value, level);
             case NAME_PART_TYPE_VARIABLE:
-                return new VariableNamePart(replacements, conditions, value);
+                return new VariableNamePart(replacements, conditions, value, format);
             case NAME_PART_TYPE_METADATA:
-                return new MetadataNamePart(replacements, conditions, value, level, fallback);
+                return new MetadataNamePart(replacements, conditions, value, level, fallback, format);
             case NAME_PART_TYPE_ORIGINAL_FILE_NAME:
-                return new VariableNamePart(replacements, conditions, CUSTOM_VARIABLE_ORIGINAL_FILE_NAME);
+                return new VariableNamePart(replacements, conditions, CUSTOM_VARIABLE_ORIGINAL_FILE_NAME, format);
             default:
                 throw new IllegalArgumentException("Unable to parse namepart configuration of type \"" + type + "\"!");
         }

@@ -177,7 +177,10 @@ Die Konfiguration des Plugins erfolgt innerhalb der bereits erwähnten Konfigura
           sowie einen Zähler erzeugen (<code>counter</code>). Der Parameter <code>originalfilename</code> 
           entspricht dem originalen Dateinamen der Datei bevor das Plugin erstmalig 
           ausgeführt wird. Bei Metadaten wird der Name des Metadatentyps angegeben (beispielsweise 
-          <code>TitleDocMain</code>). Für den Typen <code>metadata</code> kann zusätzlich das Attribut 
+          <code>TitleDocMain</code>). Für die Typen <code>variable</code> und <code>metadata</code> kann das
+          Attribut <code>format</code> definiert werden. Damit lässt sich der Wert anschließend formattieren
+          (beispielsweise <code>%03d</code> für eine dreistellige Zahl mit führenden Nullen).
+          Für den Typen <code>metadata</code> kann zusätzlich das Attribut 
           <code>level</code> definiert werden. Dieses gibt an in welchem Strukturelement nach dem
           Metadatum gesucht werden soll (bei Zeitungen beispielsweise auf Ausgabenebene `NewspaperIssue`).
           Für die Generierung des Zählers ist entscheidend, welche Anzahl an Stellen definiert wurden. 
