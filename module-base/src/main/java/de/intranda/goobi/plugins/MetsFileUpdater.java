@@ -57,7 +57,7 @@ public class MetsFileUpdater {
                 .stream()
                 .filter(e -> renamingDoesMatchToOldLocation(e, oldLocation))
                 .map(e -> applyRenamingToOldLocation(e, oldLocation))
-                .collect(Collectors.toList());
+                .toList();
         if (newLocations.size() != 1) {
             throw new IllegalArgumentException("Number of results for the change of file location \"" + oldLocation
                     + "\" is not unique! Number of found results: " + newLocations.size());
@@ -68,9 +68,22 @@ public class MetsFileUpdater {
     private boolean renamingDoesMatchToOldLocation(Map.Entry<Path, Path> renamingEntry, String oldLocation) {
         String[] from = renamingEntry.getKey().toString().split("/");
         String[] old = oldLocation.split("/");
-        return from[from.length - 1].equals(old[old.length - 1])
-                && old[old.length - 2].endsWith(from[from.length - 2])
-                && from[from.length - 3].equals(old[old.length - 3]);
+
+        int maxComparisons = 2;
+        int fromIndex = from.length - 1;
+        int oldIndex = old.length - 1;
+        int comparisons = 0;
+
+        while (fromIndex >= 0 && oldIndex >= 0 && comparisons < maxComparisons) {
+            if (!from[fromIndex].equals(old[oldIndex])) {
+                return false;
+            }
+            fromIndex--;
+            oldIndex--;
+            comparisons++;
+        }
+
+        return true;
     }
 
     private String applyRenamingToOldLocation(Map.Entry<Path, Path> renamingEntry, String oldLocation) {

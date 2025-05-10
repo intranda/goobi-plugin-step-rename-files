@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import de.sub.goobi.helper.exceptions.SwapException;
+import ugh.dl.ContentFile;
 import ugh.dl.Fileformat;
 import ugh.dl.Prefs;
 import ugh.exceptions.PreferencesException;
@@ -34,7 +35,7 @@ import ugh.exceptions.WriteException;
 import ugh.fileformats.mets.MetsMods;
 
 public class MetsFileUpdaterTest {
-    private static final String DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY = "/opt/digiverso/goobi/metadata/1/images/media";
+    private static final String DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY = "/opt/digiverso/goobi/metadata/1/images/bergsphi_625017145_media";
 
     private MetsFileUpdater metsFileUpdater;
 
@@ -66,7 +67,7 @@ public class MetsFileUpdaterTest {
                 .getFileSet()
                 .getAllFiles()
                 .stream()
-                .map(cf -> cf.getLocation())
+                .map(ContentFile::getLocation)
                 .collect(Collectors.toList());
     }
 

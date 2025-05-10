@@ -7,6 +7,8 @@
         <!-- e.g. process.folder.images.greyscale={processtitle}_greyscale -->
         <!-- if left blank or configured by *, or if there is no folder tag found, then the default settings will be used -->
         <folder>greyscale</folder>
+        <!-- don't touch mets file after renaming -->
+        <updateMetsFile>false</updateMetsFile>
         
         <startValue>2</startValue>
         <!-- Replacement removed anything in the process title before and including the '_' -->
@@ -14,6 +16,11 @@
             {processtitle}
             <replace regex="^.*?_" replacement=""/>
             <condition value="{meta._imageFilePrefix}" matches="^$"/>
+        </namepart>
+        <namepart type="static">_</namepart>
+        <namepart type="metadata" level="Newspaper">
+            TitleDocMain
+            <replace regex="\s+" replacement=""/>
         </namepart>
         <namepart type="static">_</namepart>
         <namepart type="counter">00000</namepart>

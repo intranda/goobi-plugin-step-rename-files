@@ -54,7 +54,10 @@ import de.sub.goobi.helper.StorageProviderInterface;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
 import de.sub.goobi.persistence.managers.PropertyManager;
+import ugh.dl.Fileformat;
 import ugh.dl.Prefs;
+import ugh.exceptions.PreferencesException;
+import ugh.exceptions.ReadException;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({ MetsFileUpdater.class, ConfigurationHelper.class, ConfigPlugins.class, PropertyManager.class, StorageProvider.class })
@@ -96,15 +99,18 @@ public class RenameFilesPluginTest {
     }
 
     @Before
-    public void setup() throws IOException, SwapException, DAOException {
+    public void setup() throws IOException, SwapException, DAOException, PreferencesException, ReadException {
         rulesetPreferences = mock(Prefs.class);
         ruleset = mock(Ruleset.class);
         when(ruleset.getPreferences()).thenReturn(rulesetPreferences);
         project = mock(Project.class);
         when(project.getId()).thenReturn(DEFAULT_PROJECT_ID);
         when(project.getTitel()).thenReturn(DEFAULT_PROJECT_TITLE);
+        Fileformat fileformat = mock(Fileformat.class);
+        when(fileformat.getDigitalDocument()).thenReturn(null);
         process = mock(Process.class);
         when(process.getMetadataFilePath()).thenReturn("");
+        when(process.readMetadataFile()).thenReturn(fileformat);
         when(process.getId()).thenReturn(DEFAULT_PROCESS_ID);
         when(process.getTitel()).thenReturn(DEFAULT_PROCESS_TITLE);
         when(process.getProjekt()).thenReturn(project);

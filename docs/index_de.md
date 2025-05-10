@@ -28,13 +28,20 @@ Dabei sieht der Inhalt dieser Konfigurationsdatei beispielhaft wie folgt aus:
     <config>
         <project>Manuscript_Project</project>
         <step>*</step>
-        <folder>*</folder>
+        <folder>greyscale</folder>
+        <!-- don't touch mets file after renaming -->
+        <updateMetsFile>false</updateMetsFile>
         <startValue>2</startValue>
         <!-- Replacement removed anything in the process title before and including the '_' -->
         <namepart type="variable">
             {processtitle}
             <replace regex="^.*?_" replacement=""/>
             <condition value="{meta._imageFilePrefix}" matches="^$"/>
+        </namepart>
+        <namepart type="static">_</namepart>
+        <namepart type="metadata" level="Newspaper">
+            TitleDocMain
+            <replace regex="\s+" replacement=""/>
         </namepart>
         <namepart type="static">_</namepart>
         <namepart type="counter">00000</namepart>
@@ -149,6 +156,11 @@ Die Konfiguration des Plugins erfolgt innerhalb der bereits erwähnten Konfigura
       <td style="text-align:left">Dieser Parameter lässt die Nutzer steuern, welche Verzeichniss für die Umbenennung berücksichtigt werden sollen. Wenn hier als Wert <code>*</code> angegeben wird, der Parameter fehlt oder der Wert nicht konfiguriert ist, werden die default-Settings verwendet.</td>
     </tr>
     <tr>
+      <td style="text-align:left"><code>updateMetsFile</code>
+      </td>
+      <td style="text-align:left">Dieser Parameter lässt die Nutzer steuern, ob die Dateiverlinkungen in der METS Datei nach der Umbenennung aktualisiert werden sollen. Wenn nichts angegeben wird, ist diese Funktion standardmäßig aktiviert.</td>
+    </tr>
+    <tr>
       <td style="text-align:left"><code>startValue</code>
       </td>
       <td style="text-align:left">Dieser Wert steuert, mit welchem Startwert der hochzählende <code>counter</code> beginnen
@@ -161,15 +173,25 @@ Die Konfiguration des Plugins erfolgt innerhalb der bereits erwähnten Konfigura
         <p>Dieser ebenfalls mehrfach verwendbare Parameter steuert die Generierung
           der Dateinamen. Er kann statische Elemente beinhalten (<code>static</code>),
           den originale Dateinamen verwenden (<code>originalfilename</code>),
-          Variablen aus Goobi nutzen (<code>variable</code>) sowie einen Zähler
-          erzeugen (<code>counter</code>). Der Parameter <code>originalfilename</code> 
+          Variablen aus Goobi nutzen (<code>variable</code>), Metadaten nutzen (<code>metadata</code>)
+          sowie einen Zähler erzeugen (<code>counter</code>). Der Parameter <code>originalfilename</code> 
           entspricht dem originalen Dateinamen der Datei bevor das Plugin erstmalig 
-          ausgeführt wird. Für die Generierung des Zählers ist entscheidend, 
-          welche Anzahl an Stellen definiert wurden. Der Wert <code>00000</code> würde
-          beispielsweise fünfstellige Zahlen mit ggf. vorangestellten Nullen 
-          erzeugen.</p>
+          ausgeführt wird. Bei Metadaten wird der Name des Metadatentyps angegeben (beispielsweise 
+          <code>TitleDocMain</code>). Für die Typen <code>variable</code> und <code>metadata</code> kann das
+          Attribut <code>format</code> definiert werden. Damit lässt sich der Wert anschließend formattieren
+          (beispielsweise <code>%03d</code> für eine dreistellige Zahl mit führenden Nullen).
+          Für den Typen <code>metadata</code> kann zusätzlich das Attribut 
+          <code>level</code> definiert werden. Dieses gibt an in welchem Strukturelement nach dem
+          Metadatum gesucht werden soll (bei Zeitungen beispielsweise auf Ausgabenebene `NewspaperIssue`).
+          Für die Generierung des Zählers ist entscheidend, welche Anzahl an Stellen definiert wurden. 
+          Der Wert <code>00000</code> würde beispielsweise fünfstellige Zahlen mit ggf. vorangestellten Nullen 
+          erzeugen. Auch ein Zähler kann das zusätzliche Attribut <code>level</code> enthalten. In diesem Fall
+          ist der Zähler lokal für jedes Strukturlelement des definierten Typen <code>level</code>. So können
+          bei Zeitungen beispielsweise Seitenzähler pro Ausgabe realisiert werden, wenn <code>level</code> auf
+          <code>NewspaperIssue</code> gesetzt wird.
+        </p>
         <p>Die so definierten Bestandteile des Dateinamens werden für die Benennung
-          miteinander verkettet und anschlie?end um die eigentliche Dateiendung
+          miteinander verkettet und anschließend um die eigentliche Dateiendung
           ergänzt, um so die Datei zu benennen.</p>
       </td>
     </tr>

@@ -5,14 +5,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Optional;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import org.apache.commons.configuration.HierarchicalConfiguration;
@@ -42,7 +36,7 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
-import ugh.dl.Fileformat;
+import ugh.dl.*;
 import ugh.exceptions.PreferencesException;
 import ugh.exceptions.ReadException;
 
@@ -55,6 +49,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private static final String NAME_PART_TYPE_STATIC = "static";
     private static final String NAME_PART_TYPE_COUNTER = "counter";
     private static final String NAME_PART_TYPE_VARIABLE = "variable";
+    private static final String NAME_PART_TYPE_METADATA = "metadata";
     private static final String NAME_PART_TYPE_ORIGINAL_FILE_NAME = "originalfilename";
     private static final String CUSTOM_VARIABLE_ORIGINAL_FILE_NAME = "{" + NAME_PART_TYPE_ORIGINAL_FILE_NAME + "}";
 
@@ -76,6 +71,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private String returnPath;
 
     private VariableReplacer variableReplacer;
+    private DigitalDocument digitalDocument;
     private List<String> configuredFoldersToRename;
     private RenamingFormatter renamingFormatter;
 
@@ -314,38 +310,139 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
+    private Map<DocStruct, Integer> perStructureElementCounters;
     class CounterNamePart extends NamePart {
         private NumberFormat format;
+        private int startValue;
         private int counter = 1;
+        private Optional<String> level;
 
-        public CounterNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String format) {
+        public CounterNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String format, String level) {
             super(replacements, conditions);
             this.format = new DecimalFormat(format);
+            this.level = Optional.ofNullable(level);
         }
 
         @Override
         protected String generate(Path oldName) {
+            if (level.isPresent()) {
+                List<DocStruct> docStructs = findDocStructsForFile(oldName, level.get());
+                if (!docStructs.isEmpty()) {
+                    DocStruct ds = docStructs.getFirst();
+                    int lastValue;
+                    if (perStructureElementCounters.containsKey(ds)) {
+                        lastValue = perStructureElementCounters.get(ds);
+                    } else {
+                        lastValue = startValue-1;
+                    }
+                    perStructureElementCounters.put(ds, lastValue+1);
+                    return format.format(lastValue+1);
+                } else {
+                    log.warn("No DocStruct found for file " + oldName + " with level " + level.get());
+                }
+            }
             return format.format(counter++);
         }
 
         @Override
         protected void reset(RenamingFormatter parent) {
             super.reset(parent);
-            this.counter = parent.getStartValue();
+            this.startValue = parent.getStartValue();
+            this.counter = startValue;
         }
     }
 
     class VariableNamePart extends NamePart {
         private String rawString;
+        private Optional<String> format;
 
-        public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString) {
+        public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString, String format) {
             super(replacements, conditions);
             this.rawString = rawString;
+            this.format = Optional.ofNullable(format);
         }
 
         @Override
         protected String generate(Path oldName) {
-            return getReplacer().replace(oldName, rawString);
+            var result = getReplacer().replace(oldName, rawString);
+            if (format.isPresent()) {
+                result = formatString(format.get(), result);
+            }
+            return result;
+        }
+    }
+
+    class MetadataNamePart extends NamePart {
+        private String metadataName;
+        private String docStructLevel;
+        private Optional<String> fallback;
+        private Optional<String> format;
+
+        public MetadataNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String metadataName, String docStructLevel, String fallback, String format) {
+            super(replacements, conditions);
+            this.metadataName = metadataName;
+            this.docStructLevel = docStructLevel;
+            this.fallback = Optional.ofNullable(fallback);
+            this.format = Optional.ofNullable(format);
+        }
+
+        @Override
+        protected String generate(Path oldName) {
+            List<DocStruct> docStructs = findDocStructsForFile(oldName, docStructLevel);
+
+            List<Metadata> matchingMetadata = docStructs.stream()
+                    .flatMap(ds -> ds.getAllMetadata().stream())
+                    .filter(md -> md.getType().getName().equals(this.metadataName))
+                    .toList();
+
+            var result =  matchingMetadata.stream().findFirst().map(Metadata::getValue)
+                    .orElse(this.fallback.orElse("MISSING"));
+            if (format.isPresent()) {
+                result = formatString(format.get(), result);
+            }
+            return result;
+        }
+    }
+
+    private String formatString(String format, String value) {
+        try {
+             return String.format(format, value);
+        } catch (IllegalFormatException e) {
+            try {
+                return String.format(format, Integer.parseInt(value));
+            } catch (NumberFormatException e1) {
+                log.error("Illegal format string: {} for value: {}", format, value);
+                return value;
+            }
+        }
+    }
+
+    private List<DocStruct> findDocStructsForFile(Path fileName, String level) {
+        try {
+            // find physical page for file
+            DocStruct page = digitalDocument.getPhysicalDocStruct().getAllChildren().stream()
+                    .filter(c -> c.getImageName().equals(fileName.toFile().getName()))
+                    .findFirst()
+                    .orElseThrow();
+
+            List<DocStruct> result = new LinkedList<>();
+            // add anchor if available
+            if (digitalDocument.getLogicalDocStruct().getType().isAnchor()) {
+                result.add(digitalDocument.getLogicalDocStruct());
+            }
+
+            // find all references to the page
+            result.addAll(page.getAllFromReferences().stream()
+                    .map(Reference::getSource)
+                    .toList());
+
+            if (level != null) {
+                result.removeIf(ds -> !ds.getType().getName().equals(level));
+            }
+
+            return result;
+        } catch (NullPointerException | NoSuchElementException e) {
+            return Collections.emptyList();
         }
     }
 
@@ -361,12 +458,22 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         this.returnPath = returnPath;
         // TODO: Plugin initialization should also throw exceptions!
         try {
+            this.digitalDocument = getDigitalDocument();
             this.variableReplacer = getVariableReplacer();
+            this.perStructureElementCounters = new HashMap<>();
             SubnodeConfiguration myconfig = ConfigPlugins.getProjectAndStepConfig(title, step);
             loadPluginConfiguration(myconfig);
         } catch (PluginException e) {
             log.error(e.getMessage());
             log.error(e);
+        }
+    }
+
+    private DigitalDocument getDigitalDocument() throws PluginException {
+        try {
+            return process.readMetadataFile().getDigitalDocument();
+        } catch (ReadException | IOException | SwapException | PreferencesException | NullPointerException e1) {
+            throw new PluginException("Errors happened while trying to initialize the Fileformat and VariableReplacer", e1);
         }
     }
 
@@ -399,11 +506,14 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             throw new PluginException("Error during namepart parsing!", e);
         }
 
-        this.updateMetsFile = config.getBoolean("metsFile/update", false);
+        this.updateMetsFile = config.getBoolean("updateMetsFile", true);
     }
 
     private NamePart parseNamePartConfiguration(HierarchicalConfiguration namePartXML) throws IllegalArgumentException {
         String type = namePartXML.getString("@type");
+        String level = namePartXML.getString("@level", null);
+        String fallback = namePartXML.getString("@fallback", null);
+        String format = namePartXML.getString("@format", null);
         String value = namePartXML.getString(".");
         List<NamePartReplacement> replacements = parseReplacements(namePartXML.configurationsAt("replace"));
         List<NamePartCondition> conditions = parseConditions(namePartXML.configurationsAt("condition"));
@@ -412,11 +522,13 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             case NAME_PART_TYPE_STATIC:
                 return new StaticNamePart(replacements, conditions, value);
             case NAME_PART_TYPE_COUNTER:
-                return new CounterNamePart(replacements, conditions, value);
+                return new CounterNamePart(replacements, conditions, value, level);
             case NAME_PART_TYPE_VARIABLE:
-                return new VariableNamePart(replacements, conditions, value);
+                return new VariableNamePart(replacements, conditions, value, format);
+            case NAME_PART_TYPE_METADATA:
+                return new MetadataNamePart(replacements, conditions, value, level, fallback, format);
             case NAME_PART_TYPE_ORIGINAL_FILE_NAME:
-                return new VariableNamePart(replacements, conditions, CUSTOM_VARIABLE_ORIGINAL_FILE_NAME);
+                return new VariableNamePart(replacements, conditions, CUSTOM_VARIABLE_ORIGINAL_FILE_NAME, format);
             default:
                 throw new IllegalArgumentException("Unable to parse namepart configuration of type \"" + type + "\"!");
         }
@@ -571,6 +683,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
         List<Path> filesToRename = StorageProvider.getInstance().listFiles(folder.toString());
         Collections.sort(filesToRename);
+        perStructureElementCounters.clear();
         renamingFormatter.reset();
 
         for (Path file : filesToRename) {
