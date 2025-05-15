@@ -9,6 +9,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
+import de.sub.goobi.helper.Helper;
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.goobi.beans.Process;
@@ -232,9 +233,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             nameParts.stream().forEach(np -> np.reset(this));
         }
 
-        public String generateNewName(Path oldName) {
+        public String generateNewName(Path oldName) throws PluginException {
             StringBuilder sb = new StringBuilder();
-            nameParts.stream().forEachOrdered(np -> sb.append(np.generateNamePart(oldName)));
+            for (NamePart namePart : nameParts) {
+                sb.append(namePart.generateNamePart(oldName));
+            }
             return sb.toString();
         }
     }
@@ -253,7 +256,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         @NonNull
         private List<NamePartCondition> conditions;
 
-        public String generateNamePart(Path oldName) {
+        public String generateNamePart(Path oldName) throws PluginException {
             if (!allConditionsMatch(oldName)) {
                 return "";
             }
@@ -264,7 +267,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             return result;
         }
 
-        protected abstract String generate(Path oldName);
+        protected abstract String generate(Path oldName) throws PluginException;
 
         protected void reset(RenamingFormatter parent) {
             this.replacer = parent.getReplacer();
@@ -363,7 +366,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        protected String generate(Path oldName) {
+        protected String generate(Path oldName) throws PluginException {
             var result = getReplacer().replace(oldName, rawString);
             if (format.isPresent()) {
                 result = formatString(format.get(), result);
@@ -387,7 +390,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
 
         @Override
-        protected String generate(Path oldName) {
+        protected String generate(Path oldName) throws PluginException {
             List<DocStruct> docStructs = findDocStructsForFile(oldName, docStructLevel);
 
             List<Metadata> matchingMetadata = docStructs.stream()
@@ -396,7 +399,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                     .toList();
 
             var result =  matchingMetadata.stream().findFirst().map(Metadata::getValue)
-                    .orElse(this.fallback.orElse("MISSING"));
+                    .orElseThrow(() -> new PluginException("No metadata found for page \"" + oldName + "\" and metadata \"" + metadataName + "\" on level \"" + docStructLevel + "\""));
             if (format.isPresent()) {
                 result = formatString(format.get(), result);
             }
@@ -404,15 +407,14 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         }
     }
 
-    private String formatString(String format, String value) {
+    private String formatString(String format, String value) throws PluginException {
         try {
              return String.format(format, value);
         } catch (IllegalFormatException e) {
             try {
                 return String.format(format, Integer.parseInt(value));
             } catch (NumberFormatException e1) {
-                log.error("Illegal format string: {} for value: {}", format, value);
-                return value;
+                throw new PluginException("Illegal format string: " + format + " for value: " + value);
             }
         }
     }
@@ -614,8 +616,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             updateProcessPropertyWithNewFileNameHistory();
             saveProcessProperty();
         } catch (IOException | PluginException | SwapException | DAOException e) {
-            log.error(e.getMessage());
-            log.error(e);
+            log.error("Error during file renaming", e);
             return PluginReturnValue.ERROR;
         }
 
