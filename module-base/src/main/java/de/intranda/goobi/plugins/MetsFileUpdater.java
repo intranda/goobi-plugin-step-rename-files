@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.goobi.beans.Process;
@@ -53,16 +54,16 @@ public class MetsFileUpdater {
     }
 
     private String lookUpNewLocation(Map<Path, Path> namesMap, String oldLocation) {
-        List<String> newLocations = namesMap.entrySet()
+        Set<String> newLocations = namesMap.entrySet()
                 .stream()
                 .filter(e -> renamingDoesMatchToOldLocation(e, oldLocation))
                 .map(e -> applyRenamingToOldLocation(e, oldLocation))
-                .toList();
+                .collect(Collectors.toSet());
         if (newLocations.size() != 1) {
             throw new IllegalArgumentException("Number of results for the change of file location \"" + oldLocation
                     + "\" is not unique! Number of found results: " + newLocations.size());
         }
-        return newLocations.get(0);
+        return newLocations.iterator().next();
     }
 
     private boolean renamingDoesMatchToOldLocation(Map.Entry<Path, Path> renamingEntry, String oldLocation) {
