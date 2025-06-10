@@ -5,15 +5,23 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.IllegalFormatException;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import de.sub.goobi.helper.Helper;
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
+import org.goobi.beans.GoobiProperty;
+import org.goobi.beans.GoobiProperty.PropertyOwnerType;
 import org.goobi.beans.Process;
-import org.goobi.beans.Processproperty;
 import org.goobi.beans.Step;
 import org.goobi.production.enums.PluginGuiType;
 import org.goobi.production.enums.PluginReturnValue;
@@ -37,7 +45,11 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
-import ugh.dl.*;
+import ugh.dl.DigitalDocument;
+import ugh.dl.DocStruct;
+import ugh.dl.Fileformat;
+import ugh.dl.Metadata;
+import ugh.dl.Reference;
 import ugh.exceptions.PreferencesException;
 import ugh.exceptions.ReadException;
 
@@ -66,7 +78,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private PluginGuiType pluginGuiType = PluginGuiType.NONE;
 
     private Process process;
-    private Processproperty property;
+    private GoobiProperty property;
     @Getter
     private Step step;
     private String returnPath;
@@ -314,13 +326,15 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     }
 
     private Map<DocStruct, Integer> perStructureElementCounters;
+
     class CounterNamePart extends NamePart {
         private NumberFormat format;
         private int startValue;
         private int counter = 1;
         private Optional<String> level;
 
-        public CounterNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String format, String level) {
+        public CounterNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String format,
+                String level) {
             super(replacements, conditions);
             this.format = new DecimalFormat(format);
             this.level = Optional.ofNullable(level);
@@ -336,10 +350,10 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                     if (perStructureElementCounters.containsKey(ds)) {
                         lastValue = perStructureElementCounters.get(ds);
                     } else {
-                        lastValue = startValue-1;
+                        lastValue = startValue - 1;
                     }
-                    perStructureElementCounters.put(ds, lastValue+1);
-                    return format.format(lastValue+1);
+                    perStructureElementCounters.put(ds, lastValue + 1);
+                    return format.format(lastValue + 1);
                 } else {
                     log.warn("No DocStruct found for file " + oldName + " with level " + level.get());
                 }
@@ -359,7 +373,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         private String rawString;
         private Optional<String> format;
 
-        public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString, String format) {
+        public VariableNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String rawString,
+                String format) {
             super(replacements, conditions);
             this.rawString = rawString;
             this.format = Optional.ofNullable(format);
@@ -381,7 +396,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         private Optional<String> fallback;
         private Optional<String> format;
 
-        public MetadataNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String metadataName, String docStructLevel, String fallback, String format) {
+        public MetadataNamePart(@NonNull List<NamePartReplacement> replacements, @NonNull List<NamePartCondition> conditions, String metadataName,
+                String docStructLevel, String fallback, String format) {
             super(replacements, conditions);
             this.metadataName = metadataName;
             this.docStructLevel = docStructLevel;
@@ -398,8 +414,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                     .filter(md -> md.getType().getName().equals(this.metadataName))
                     .toList();
 
-            var result =  matchingMetadata.stream().findFirst().map(Metadata::getValue)
-                    .orElseThrow(() -> new PluginException("No metadata found for page \"" + oldName + "\" and metadata \"" + metadataName + "\" on level \"" + docStructLevel + "\""));
+            var result = matchingMetadata.stream()
+                    .findFirst()
+                    .map(Metadata::getValue)
+                    .orElseThrow(() -> new PluginException("No metadata found for page \"" + oldName + "\" and metadata \"" + metadataName
+                            + "\" on level \"" + docStructLevel + "\""));
             if (format.isPresent()) {
                 result = formatString(format.get(), result);
             }
@@ -409,7 +428,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     private String formatString(String format, String value) throws PluginException {
         try {
-             return String.format(format, value);
+            return String.format(format, value);
         } catch (IllegalFormatException e) {
             try {
                 return String.format(format, Integer.parseInt(value));
@@ -422,7 +441,9 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     private List<DocStruct> findDocStructsForFile(Path fileName, String level) {
         try {
             // find physical page for file
-            DocStruct page = digitalDocument.getPhysicalDocStruct().getAllChildren().stream()
+            DocStruct page = digitalDocument.getPhysicalDocStruct()
+                    .getAllChildren()
+                    .stream()
                     .filter(c -> c.getImageName().equals(fileName.toFile().getName()))
                     .findFirst()
                     .orElseThrow();
@@ -434,7 +455,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             }
 
             // find all references to the page
-            result.addAll(page.getAllFromReferences().stream()
+            result.addAll(page.getAllFromReferences()
+                    .stream()
                     .map(Reference::getSource)
                     .toList());
 
@@ -551,27 +573,27 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
                 .collect(Collectors.toList());
     }
 
-    private Processproperty initializeProcessProperty(Process process) {
-        List<Processproperty> props = PropertyManager.getProcessPropertiesForProcess(process.getId());
-        for (Processproperty p : props) {
-            if (PROPERTY_TITLE.equals(p.getTitel())) {
+    private GoobiProperty initializeProcessProperty(Process process) {
+        List<GoobiProperty> props = process.getProperties();
+        for (GoobiProperty p : props) {
+            if (PROPERTY_TITLE.equals(p.getPropertyName())) {
                 return p;
             }
         }
 
-        property = new Processproperty();
-        property.setProcessId(process.getId());
-        property.setTitel(PROPERTY_TITLE);
+        property = new GoobiProperty(PropertyOwnerType.PROCESS);
+        property.setOwner(process);
+        property.setPropertyName(PROPERTY_TITLE);
 
         return property;
     }
 
     private void updateProcessPropertyWithNewFileNameHistory() {
-        property.setWert(serializeOriginalFileNameHistoryIntoJson(originalFileNameHistory));
+        property.setPropertyValue(serializeOriginalFileNameHistoryIntoJson(originalFileNameHistory));
     }
 
     private void saveProcessProperty() {
-        PropertyManager.saveProcessProperty(property);
+        PropertyManager.saveProperty(property);
     }
 
     private OriginalFileNameHistory deserializeOriginalFileNameHistoryFromJson(String json) {
@@ -595,7 +617,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     public PluginReturnValue run() {
         try {
             property = initializeProcessProperty(step.getProzess());
-            originalFileNameHistory = deserializeOriginalFileNameHistoryFromJson(this.property.getWert());
+            originalFileNameHistory = deserializeOriginalFileNameHistoryFromJson(this.property.getPropertyValue());
             List<Path> foldersToRename = determineFoldersToRename();
             log.trace("Performing renaming in these folders: " + foldersToRename.stream().map(Path::toString).collect(Collectors.joining(", ")));
             Map<Path, Path> renamingMapping = determineRenamingForAllFilesInAllFolders(foldersToRename);
@@ -677,7 +699,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             return Collections.emptyMap();
         }
         if (!StorageProvider.getInstance().isDirectory(folder)) {
-            throw new PluginException("Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is a file and not a directory!");
+            throw new PluginException(
+                    "Cannot rename all files in directory. The given path \"" + folder.toString() + "\" is a file and not a directory!");
         }
 
         Map<Path, Path> result = new TreeMap<>();
