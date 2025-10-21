@@ -3,6 +3,10 @@ title: Umbenennung von Dateien
 identifier: intranda_step_rename-files
 published: true
 description: Dieses Step Plugin erlaubt die automatische Anpassung von Dateinamen innerhalb von Goobi Vorgängen.
+keywords:
+    - Goobi workflow
+    - Plugin
+    - Step Plugin
 ---
 ## Einführung
 Dieses Plugin dient zu bedingen Umbenennung von Dateien innerhalb der verschiedenen Ordner eines Vorgangs von Goobi workflow. Die Benennung erfolgt dabei abhängig von einer Konfigurationsdatei, die für unterschiedliche Workflows jeweils anders aufgebaut sein kann.
