@@ -2,8 +2,11 @@
 title: Renaming files
 identifier: intranda_step_rename-files
 published: true
-description: This step plugin allows you to automatically adjust file names within Goobi
-  processes.
+description: This step plugin allows you to automatically adjust file names within Goobi processes.
+keywords:
+    - Goobi workflow
+    - Plugin
+    - Step Plugin
 ---
 ## Introduction
 This plugin is used to conditionally rename files within the different folders of an operation of Goobi workflow. The naming is dependent on a configuration file, which may be structured differently for different workflows.
