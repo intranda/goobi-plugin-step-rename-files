@@ -436,7 +436,7 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             DocStruct page = digitalDocument.getPhysicalDocStruct()
                     .getAllChildren()
                     .stream()
-                    .filter(c -> c.getImageName().equals(fileName.toFile().getName()))
+                    .filter(c -> this.fileMatchesDocStruct(c.getImageName(), fileName.toFile().getName()))
                     .findFirst()
                     .orElseThrow();
 
@@ -460,6 +460,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
         } catch (NullPointerException | NoSuchElementException e) {
             return Collections.emptyList();
         }
+    }
+
+    private boolean fileMatchesDocStruct(String imageName, String fileName) {
+        return imageName.substring(0, imageName.lastIndexOf('.'))
+                .equals(fileName.substring(0, fileName.lastIndexOf('.')));
     }
 
     // ###################################################################################
