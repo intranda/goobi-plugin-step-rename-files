@@ -5,28 +5,20 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.IllegalFormatException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import de.sub.goobi.helper.Helper;
+import de.sub.goobi.persistence.managers.JournalManager;
 import org.apache.commons.configuration.HierarchicalConfiguration;
 import org.apache.commons.configuration.SubnodeConfiguration;
 import org.goobi.beans.GoobiProperty;
 import org.goobi.beans.GoobiProperty.PropertyOwnerType;
+import org.goobi.beans.JournalEntry;
 import org.goobi.beans.Process;
 import org.goobi.beans.Step;
-import org.goobi.production.enums.PluginGuiType;
-import org.goobi.production.enums.PluginReturnValue;
-import org.goobi.production.enums.PluginType;
-import org.goobi.production.enums.StepReturnValue;
+import org.goobi.production.enums.*;
 import org.goobi.production.plugin.interfaces.IStepPluginVersion2;
 
 import com.google.gson.Gson;
@@ -638,7 +630,11 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             updateProcessPropertyWithNewFileNameHistory();
             saveProcessProperty();
         } catch (IOException | PluginException | SwapException | DAOException e) {
-            log.error("Error during file renaming", e);
+            String message = "Error during file renaming";
+            Helper.setFehlerMeldung(message, e);
+            log.error(message, e);
+            JournalEntry le = new JournalEntry(step.getProzess().getId(), new Date(), "- automatic -", LogType.ERROR, message + ": " + e.getMessage(), JournalEntry.EntryType.PROCESS);
+            JournalManager.saveJournalEntry(le);
             return PluginReturnValue.ERROR;
         }
 
