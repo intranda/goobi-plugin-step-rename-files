@@ -87,7 +87,7 @@ Dieses Plugin wird in den Workflow so integriert, dass es automatisch ausgeführ
 ## Überblick und Funktionsweise
 Das Plugin wird üblicherweise vollautomatisch innerhalb des Workflows ausgeführt. Es ermittelt zunächst, ob sich innerhalb der Konfigurationsdatei ein Block befindet, der für den aktuellen Workflow bzgl. des Projektnamens und Arbeitsschrittes konfiguriert wurde. Wenn dies der Fall ist, werden die einzelnen Elemente `<namepart>` ausgewertet, mit den entsprechenden Werten für den Zähler und die Variablen aus Goobi workflow ausgestattet und anschließend miteinander verkettet. Die somit erzeugten Dateinamen werden nun für sämtliche relevanten Verzeichnisse des Goobi Vorgangs angewendet und mit den jeweils korrekten Dateinamenerweiterungen ergänzt (z.B. `.tif`).
 
-Um eine korrekte Umbennenung gewährleisten zu können, die auf dem originalen Dateinamen basiert, merkt sich das Plugin die originalen Dateinamen jeder Datei in einer Vorgangseigenschaft namens `plugin_intranda_step_rename_files`. Mit dieser Vorgangseigenschaft wird sichergestellt, dass mehrfache Ausführungen des Plugins, mit möglichen Änderungen der Konfiguration, den ursprünglichen Dateinamen korrekt auflösen.
+Um eine korrekte Umbenennung gewährleisten zu können, die auf dem originalen Dateinamen basiert, merkt sich das Plugin die originalen Dateinamen jeder Datei in einer Vorgangseigenschaft namens `plugin_intranda_step_rename_files`. Mit dieser Vorgangseigenschaft wird sichergestellt, dass mehrfache Ausführungen des Plugins, mit möglichen Änderungen der Konfiguration, den ursprünglichen Dateinamen korrekt auflösen.
 
 Details über die in diesem Plugin verwendbaren Variablen aus Goobi workflow finden sich[ innerhalb dieser Dokumentation](https://docs.intranda.com/goobi-workflow-de/manager/8).
 
@@ -157,7 +157,7 @@ Die Konfiguration des Plugins erfolgt innerhalb der bereits erwähnten Konfigura
     <tr>
       <td style="text-align:left"><code>folder</code>
       </td>
-      <td style="text-align:left">Dieser Parameter lässt die Nutzer steuern, welche Verzeichniss für die Umbenennung berücksichtigt werden sollen. Wenn hier als Wert <code>*</code> angegeben wird, der Parameter fehlt oder der Wert nicht konfiguriert ist, werden die default-Settings verwendet.</td>
+      <td style="text-align:left">Dieser Parameter lässt die Nutzer steuern, welche Verzeichnisse für die Umbenennung berücksichtigt werden sollen. Wenn hier als Wert <code>*</code> angegeben wird, der Parameter fehlt oder der Wert nicht konfiguriert ist, werden die default-Settings verwendet.</td>
     </tr>
     <tr>
       <td style="text-align:left"><code>updateMetsFile</code>
@@ -182,7 +182,7 @@ Die Konfiguration des Plugins erfolgt innerhalb der bereits erwähnten Konfigura
           entspricht dem originalen Dateinamen der Datei bevor das Plugin erstmalig 
           ausgeführt wird. Bei Metadaten wird der Name des Metadatentyps angegeben (beispielsweise 
           <code>TitleDocMain</code>). Für die Typen <code>variable</code> und <code>metadata</code> kann das
-          Attribut <code>format</code> definiert werden. Damit lässt sich der Wert anschließend formattieren
+          Attribut <code>format</code> definiert werden. Damit lässt sich der Wert anschließend formatieren
           (beispielsweise <code>%03d</code> für eine dreistellige Zahl mit führenden Nullen).
           Für den Typen <code>metadata</code> kann zusätzlich das Attribut 
           <code>level</code> definiert werden. Dieses gibt an in welchem Strukturelement nach dem
@@ -190,7 +190,7 @@ Die Konfiguration des Plugins erfolgt innerhalb der bereits erwähnten Konfigura
           Für die Generierung des Zählers ist entscheidend, welche Anzahl an Stellen definiert wurden. 
           Der Wert <code>00000</code> würde beispielsweise fünfstellige Zahlen mit ggf. vorangestellten Nullen 
           erzeugen. Auch ein Zähler kann das zusätzliche Attribut <code>level</code> enthalten. In diesem Fall
-          ist der Zähler lokal für jedes Strukturlelement des definierten Typen <code>level</code>. So können
+          ist der Zähler lokal für jedes Strukturelement des definierten Typen <code>level</code>. So können
           bei Zeitungen beispielsweise Seitenzähler pro Ausgabe realisiert werden, wenn <code>level</code> auf
           <code>NewspaperIssue</code> gesetzt wird.
         </p>
