@@ -43,7 +43,9 @@ Dabei sieht der Inhalt dieser Konfigurationsdatei beispielhaft wie folgt aus:
             <condition value="{meta._imageFilePrefix}" matches="^$"/>
         </namepart>
         <namepart type="static">_</namepart>
-        <namepart type="metadata" level="Newspaper">
+        <!-- Uses "UNKNOWN" if the structure element has no TitleDocMain; without a
+             fallback the plugin aborts the renaming instead -->
+        <namepart type="metadata" level="Newspaper" fallback="UNKNOWN">
             TitleDocMain
             <replace regex="\s+" replacement=""/>
         </namepart>
@@ -187,6 +189,10 @@ Die Konfiguration des Plugins erfolgt innerhalb der bereits erwähnten Konfigura
           Für den Typen <code>metadata</code> kann zusätzlich das Attribut 
           <code>level</code> definiert werden. Dieses gibt an in welchem Strukturelement nach dem
           Metadatum gesucht werden soll (bei Zeitungen beispielsweise auf Ausgabenebene `NewspaperIssue`).
+          Ebenfalls nur für den Typen <code>metadata</code> lässt sich über das Attribut
+          <code>fallback</code> ein Ersatzwert festlegen. Dieser wird verwendet, wenn das Metadatum am
+          angegebenen Strukturelement nicht vorhanden ist. Ist kein <code>fallback</code> konfiguriert,
+          bricht das Plugin in diesem Fall mit einem Fehler ab, ohne eine einzige Datei umzubenennen.
           Für die Generierung des Zählers ist entscheidend, welche Anzahl an Stellen definiert wurden. 
           Der Wert <code>00000</code> würde beispielsweise fünfstellige Zahlen mit ggf. vorangestellten Nullen 
           erzeugen. Auch ein Zähler kann das zusätzliche Attribut <code>level</code> enthalten. In diesem Fall

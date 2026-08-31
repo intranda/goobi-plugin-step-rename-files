@@ -18,7 +18,9 @@
             <condition value="{meta._imageFilePrefix}" matches="^$"/>
         </namepart>
         <namepart type="static">_</namepart>
-        <namepart type="metadata" level="Newspaper">
+        <!-- Uses "UNKNOWN" if the structure element has no TitleDocMain; without a
+             fallback the plugin aborts the renaming instead -->
+        <namepart type="metadata" level="Newspaper" fallback="UNKNOWN">
             TitleDocMain
             <replace regex="\s+" replacement=""/>
         </namepart>
