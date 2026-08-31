@@ -54,14 +54,17 @@ import de.sub.goobi.helper.StorageProvider;
 import de.sub.goobi.helper.StorageProviderInterface;
 import de.sub.goobi.helper.exceptions.DAOException;
 import de.sub.goobi.helper.exceptions.SwapException;
+import de.sub.goobi.persistence.managers.JournalManager;
 import de.sub.goobi.persistence.managers.PropertyManager;
 import ugh.dl.Fileformat;
 import ugh.dl.Prefs;
 import ugh.exceptions.PreferencesException;
 import ugh.exceptions.ReadException;
+import ugh.fileformats.mets.MetsMods;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({ MetsFileUpdater.class, ConfigurationHelper.class, ConfigPlugins.class, PropertyManager.class, StorageProvider.class })
+@PrepareForTest({ MetsFileUpdater.class, ConfigurationHelper.class, ConfigPlugins.class, PropertyManager.class, StorageProvider.class,
+        JournalManager.class })
 @PowerMockIgnore({ "javax.management.*" })
 public class RenameFilesPluginTest {
     private static final String DEFAULT_PROCESS_IMAGES_DIRECTORY = "/opt/digiverso/goobi/metadata/1/images";
@@ -141,6 +144,8 @@ public class RenameFilesPluginTest {
         metsFileUpdater = mock(MetsFileUpdater.class);
         setupMetsFileUpdaterMocking(metsFileUpdater);
 
+        setupJournalManagerMocking();
+
         gson = new Gson();
     }
 
@@ -175,6 +180,13 @@ public class RenameFilesPluginTest {
                 .andReturn(configurationHelper)
                 .anyTimes();
         replay(ConfigurationHelper.class);
+    }
+
+    private void setupJournalManagerMocking() {
+        mockStatic(JournalManager.class);
+        JournalManager.saveJournalEntry(EasyMock.anyObject());
+        EasyMock.expectLastCall().anyTimes();
+        replay(JournalManager.class);
     }
 
     private void setupMetsFileUpdaterMocking(MetsFileUpdater metsFileUpdater) {
@@ -861,4 +873,51 @@ public class RenameFilesPluginTest {
 
         assertEquals(PluginReturnValue.ERROR, plugin.run());
     }
+
+    /**
+     * Replaces the mocked, empty metadata file with a real METS file read through UGH, so that the
+     * metadata name part can be tested against real DocStructs. Must be called before {@link #initializate()}.
+     */
+    private void mockRealMetadataFile(String metsFileName) throws PreferencesException, ReadException, IOException, SwapException {
+        Prefs prefs = new Prefs();
+        prefs.loadPrefs(getClass().getResource("/ruleset.xml").getFile());
+        Fileformat fileformat = new MetsMods();
+        fileformat.setPrefs(prefs);
+        fileformat.read(getClass().getResource("/" + metsFileName).getFile());
+        when(ruleset.getPreferences()).thenReturn(prefs);
+        when(process.readMetadataFile()).thenReturn(fileformat);
+    }
+
+    @Test
+    public void metadataNamePart_docStructWithoutAnyMetadataAndNoFallback_expectErrorReturn() throws Exception {
+        // PHYS_0001 (00000001.jpg) is referenced by LOG_0001 of type "Cover", which carries no metadata at all
+        setupPluginConfiguration("metadata-missing-no-fallback_renaming_star");
+        mockRealMetadataFile("before-mets-update.xml");
+        initializate();
+
+        List<Path> oldFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00000001.jpg"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.ERROR, plugin.run());
+    }
+
+
+    @Test
+    public void metadataNamePart_requestedMetadataTypeAbsentAndNoFallback_expectErrorReturn() throws Exception {
+        // PHYS_0007 (00000007.jpg) is referenced by LOG_0003 of type "Chapter", which only carries TitleDocMain
+        setupPluginConfiguration("metadata-type-missing-no-fallback_renaming_star");
+        mockRealMetadataFile("before-mets-update.xml");
+        initializate();
+
+        List<Path> oldFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00000007.jpg"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.ERROR, plugin.run());
+    }
+
+
 }

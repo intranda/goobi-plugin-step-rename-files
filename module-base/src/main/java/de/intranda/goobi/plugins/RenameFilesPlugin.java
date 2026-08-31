@@ -402,7 +402,8 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             List<DocStruct> docStructs = findDocStructsForFile(oldName, docStructLevel);
 
             List<Metadata> matchingMetadata = docStructs.stream()
-                    .flatMap(ds -> ds.getAllMetadata().stream())
+                    // getAllMetadata() returns null instead of an empty list for doc structs without any metadata
+                    .flatMap(ds -> Optional.ofNullable(ds.getAllMetadata()).orElseGet(List::of).stream())
                     .filter(md -> md.getType().getName().equals(this.metadataName))
                     .toList();
 
