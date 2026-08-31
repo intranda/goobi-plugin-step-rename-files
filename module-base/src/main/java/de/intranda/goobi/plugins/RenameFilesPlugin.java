@@ -410,8 +410,9 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
             var result = matchingMetadata.stream()
                     .findFirst()
                     .map(Metadata::getValue)
+                    .or(() -> fallback)
                     .orElseThrow(() -> new PluginException("No metadata found for page \"" + oldName + "\" and metadata \"" + metadataName
-                            + "\" on level \"" + docStructLevel + "\""));
+                            + "\" on level \"" + docStructLevel + "\" and no fallback configured"));
             if (format.isPresent()) {
                 result = formatString(format.get(), result);
             }

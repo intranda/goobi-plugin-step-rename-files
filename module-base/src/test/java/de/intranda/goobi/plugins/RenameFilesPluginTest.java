@@ -903,6 +903,23 @@ public class RenameFilesPluginTest {
         assertEquals(PluginReturnValue.ERROR, plugin.run());
     }
 
+    @Test
+    public void metadataNamePart_docStructWithoutAnyMetadataAndFallback_expectFallbackUsed() throws Exception {
+        // PHYS_0001 (00000001.jpg) is referenced by LOG_0001 of type "Cover", which carries no metadata at all
+        setupPluginConfiguration("metadata-missing-with-fallback_renaming_star");
+        mockRealMetadataFile("before-mets-update.xml");
+        initializate();
+
+        List<Path> oldFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00000001.jpg"));
+        List<Path> newFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "NOTITLE.jpg"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verifyRenamingFromTo(oldFiles, newFiles);
+    }
 
     @Test
     public void metadataNamePart_requestedMetadataTypeAbsentAndNoFallback_expectErrorReturn() throws Exception {
@@ -919,5 +936,39 @@ public class RenameFilesPluginTest {
         assertEquals(PluginReturnValue.ERROR, plugin.run());
     }
 
+    @Test
+    public void metadataNamePart_requestedMetadataTypeAbsentAndFallback_expectFallbackUsed() throws Exception {
+        // PHYS_0007 (00000007.jpg) is referenced by LOG_0003 of type "Chapter", which only carries TitleDocMain
+        setupPluginConfiguration("metadata-type-missing-with-fallback_renaming_star");
+        mockRealMetadataFile("before-mets-update.xml");
+        initializate();
 
+        List<Path> oldFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00000007.jpg"));
+        List<Path> newFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "NOTITLE.jpg"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verifyRenamingFromTo(oldFiles, newFiles);
+    }
+
+    @Test
+    public void metadataNamePart_metadataPresentAndFallbackConfigured_expectMetadataValueUsed() throws Exception {
+        // PHYS_0002 (00000002.jpg) is only referenced by LOG_0000 of type "Monograph", carrying CatalogIDDigital
+        setupPluginConfiguration("metadata-present-with-fallback_renaming_star");
+        mockRealMetadataFile("before-mets-update.xml");
+        initializate();
+
+        List<Path> oldFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "00000002.jpg"));
+        List<Path> newFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "625017145.jpg"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.FINISH, plugin.run());
+
+        verifyRenamingFromTo(oldFiles, newFiles);
+    }
 }

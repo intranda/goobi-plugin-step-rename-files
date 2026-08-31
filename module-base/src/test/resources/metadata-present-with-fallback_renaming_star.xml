@@ -1,0 +1,6 @@
+<config_plugin>
+    <config>
+        <folder>*</folder>
+        <namepart type="metadata" level="Monograph" fallback="NOTITLE">CatalogIDDigital</namepart>
+    </config>
+</config_plugin>
