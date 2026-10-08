@@ -3,7 +3,9 @@ package de.intranda.goobi.plugins;
 import static org.easymock.EasyMock.expect;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -872,6 +874,34 @@ public class RenameFilesPluginTest {
         mockStorageFilePresence(oldFiles);
 
         assertEquals(PluginReturnValue.ERROR, plugin.run());
+    }
+
+    @Test
+    public void invalidReplacementRegex_expectErrorReturn() throws ConfigurationException, IOException {
+        setupPluginConfiguration("invalid-replacement-regex_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.ERROR, plugin.run());
+        verify(storage, never()).move(any(), any());
+    }
+
+    @Test
+    public void invalidConditionRegex_expectErrorReturn() throws ConfigurationException, IOException {
+        setupPluginConfiguration("invalid-condition-regex_renaming_star");
+        initializate();
+
+        List<Path> oldFiles = List.of(Paths.get(DEFAULT_PROCESS_ORIG_IMAGES_DIRECTORY, "a_01.jpg"));
+
+        mockStorageFileParentPathPresence(oldFiles);
+        mockStorageFilePresence(oldFiles);
+
+        assertEquals(PluginReturnValue.ERROR, plugin.run());
+        verify(storage, never()).move(any(), any());
     }
 
     /**

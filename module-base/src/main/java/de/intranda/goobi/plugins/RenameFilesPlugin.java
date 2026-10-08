@@ -7,6 +7,7 @@ import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 import de.sub.goobi.helper.Helper;
@@ -251,8 +252,13 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
     abstract class NamePart {
         private OverlayVariableReplacer replacer;
 
-        public boolean allConditionsMatch(Path oldName) {
-            return this.conditions.stream().allMatch(c -> c.matches(replacer, oldName));
+        public boolean allConditionsMatch(Path oldName) throws PluginException {
+            for (NamePartCondition condition : conditions) {
+                if (!condition.matches(replacer, oldName)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         @NonNull
@@ -280,9 +286,13 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     @RequiredArgsConstructor
     class NamePartCondition {
-        public boolean matches(OverlayVariableReplacer replacer, Path oldName) {
+        public boolean matches(OverlayVariableReplacer replacer, Path oldName) throws PluginException {
             String replacedValue = replacer.replace(oldName, value);
-            return replacedValue.matches(matches);
+            try {
+                return replacedValue.matches(matches);
+            } catch (PatternSyntaxException e) {
+                throw new PluginException("Invalid regular expression \"" + matches + "\" in <condition> of name part: " + e.getDescription(), e);
+            }
         }
 
         @NonNull
@@ -293,8 +303,16 @@ public class RenameFilesPlugin implements IStepPluginVersion2 {
 
     @RequiredArgsConstructor
     class NamePartReplacement {
-        public String replace(String value) {
-            return value.replaceAll(regex, replacement);
+        public String replace(String value) throws PluginException {
+            try {
+                return value.replaceAll(regex, replacement);
+            } catch (PatternSyntaxException e) {
+                throw new PluginException("Invalid regular expression \"" + regex + "\" in <replace> of name part: " + e.getDescription(), e);
+            } catch (IllegalArgumentException | IndexOutOfBoundsException e) {
+                // thrown for invalid group references like "$5" in the replacement
+                throw new PluginException("Invalid replacement \"" + replacement + "\" for regular expression \"" + regex
+                        + "\" in <replace> of name part: " + e.getMessage(), e);
+            }
         }
 
         @NonNull
